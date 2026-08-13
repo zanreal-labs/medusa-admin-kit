@@ -66,10 +66,16 @@ function getStore(): RegistryStore {
 export function registerProductColumn<TProduct extends ProductColumnProduct = ProductColumnProduct>(
   def: ProductColumnDef<TProduct>,
 ): void {
+  // These run in the admin (browser) bundle, not an API route, so a plain
+  // TypeError is the right signal for a programming mistake by a contributor.
+  // MedusaError is a server construct that maps to an HTTP status and pulls in
+  // server-only code, which has no place here.
   if (typeof def?.id !== "string" || def.id.length === 0) {
+    // eslint-disable-next-line @medusajs/use-medusa-error-not-generic-error
     throw new TypeError("registerProductColumn: `id` must be a non-empty string.");
   }
   if (typeof def.cell !== "function") {
+    // eslint-disable-next-line @medusajs/use-medusa-error-not-generic-error
     throw new TypeError(
       `registerProductColumn: column "${def.id}" must provide a \`cell\` function.`,
     );

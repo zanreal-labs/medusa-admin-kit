@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# There are no database models or migrations in this package - it is admin UI
+# plus a pure column registry - so there is no migration guard step. Add one
+# here if a model is ever introduced.
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck (server)
+        run: pnpm typecheck
+
+      - name: Typecheck (admin)
+        run: pnpm typecheck:admin
+
+      - name: Test
+        run: pnpm test
+
+      - name: Plugin build
+        run: pnpm build
