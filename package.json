@@ -1,0 +1,96 @@
+{
+  "name": "@zanreal/medusa-admin-kit",
+  "version": "0.1.0",
+  "description": "Medusa v2 toolkit for an extensible admin products list. Sibling plugins register their own columns through a shared registry and they all render in one products table, instead of each plugin shipping a separate page.",
+  "keywords": [
+    "admin",
+    "column-registry",
+    "dashboard",
+    "data-table",
+    "extensible",
+    "medusa",
+    "medusa-plugin",
+    "medusa-v2",
+    "products"
+  ],
+  "homepage": "https://github.com/zanreal-labs/medusa-admin-kit#readme",
+  "bugs": {
+    "url": "https://github.com/zanreal-labs/medusa-admin-kit/issues"
+  },
+  "license": "MIT",
+  "author": "ZanReal Labs (https://zanreal.com)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zanreal-labs/medusa-admin-kit.git"
+  },
+  "files": [
+    ".medusa/server",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./.medusa/server/src/index.d.ts",
+      "import": "./.medusa/server/src/index.js",
+      "require": "./.medusa/server/src/index.js",
+      "default": "./.medusa/server/src/index.js"
+    },
+    "./admin": {
+      "import": "./.medusa/server/src/admin/index.mjs",
+      "require": "./.medusa/server/src/admin/index.js",
+      "default": "./.medusa/server/src/admin/index.js"
+    }
+  },
+  "scripts": {
+    "build": "medusa plugin:build",
+    "dev": "medusa plugin:develop",
+    "lint": "medusa lint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:admin": "tsc --noEmit -p src/admin/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "medusa plugin:build"
+  },
+  "devDependencies": {
+    "@medusajs/admin-sdk": "2.18.0",
+    "@medusajs/admin-shared": "2.18.0",
+    "@medusajs/cli": "2.18.0",
+    "@medusajs/eslint-plugin": "2.18.0",
+    "@medusajs/framework": "2.18.0",
+    "@medusajs/icons": "2.18.0",
+    "@medusajs/js-sdk": "2.18.0",
+    "@medusajs/medusa": "2.18.0",
+    "@medusajs/test-utils": "2.18.0",
+    "@medusajs/types": "2.18.0",
+    "@medusajs/ui": "4.2.0",
+    "@swc/core": "^1.7.28",
+    "@tanstack/react-table": "^8.20.5",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.2",
+    "@types/react-dom": "^18.2.25",
+    "eslint": "^9.0.0",
+    "jiti": "^2.0.0",
+    "prop-types": "^15.8.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2",
+    "vite": "^5.2.11",
+    "vitest": "^3.2.7"
+  },
+  "peerDependencies": {
+    "@medusajs/admin-sdk": "2.18.0",
+    "@medusajs/admin-shared": "2.18.0",
+    "@medusajs/framework": "2.18.0",
+    "@medusajs/icons": "2.18.0",
+    "@medusajs/js-sdk": "2.18.0",
+    "@medusajs/ui": "4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "packageManager": "pnpm@11.13.0"
+}
