@@ -31,6 +31,14 @@ export {
 export { buildProductColumnContext, extractSkus, normalizeVariant } from "./registry/context";
 
 export {
+  BASE_PRODUCT_COLUMN_IDS,
+  renderRegisteredCell,
+  resolveProductColumns,
+} from "./registry/columns";
+
+export type { BaseProductColumnId, ResolvedProductColumn } from "./registry/columns";
+
+export {
   buildProductListQuery,
   DEFAULT_PAGE_SIZE,
   mapProductListResponse,
