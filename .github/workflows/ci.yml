@@ -42,8 +42,12 @@ jobs:
       - name: Typecheck (admin)
         run: pnpm typecheck:admin
 
-      - name: Test
-        run: pnpm test
-
+      # Ahead of the tests on purpose: src/__tests__/built-entry.test.ts asserts
+      # against the real build output (the CommonJS entry, the ESM entry, and
+      # the exports map that points a contributor's admin bundle at them), so
+      # that output has to be current when vitest runs.
       - name: Plugin build
         run: pnpm build
+
+      - name: Test
+        run: pnpm test

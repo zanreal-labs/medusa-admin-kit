@@ -25,14 +25,18 @@
   },
   "files": [
     ".medusa/server",
+    "scripts",
     "README.md",
     "LICENSE"
   ],
+  "main": "./.medusa/server/src/index.js",
+  "module": "./.medusa/server/src/index.mjs",
+  "types": "./.medusa/server/src/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "types": "./.medusa/server/src/index.d.ts",
-      "import": "./.medusa/server/src/index.js",
+      "import": "./.medusa/server/src/index.mjs",
       "require": "./.medusa/server/src/index.js",
       "default": "./.medusa/server/src/index.js"
     },
@@ -43,15 +47,15 @@
     }
   },
   "scripts": {
-    "build": "medusa plugin:build",
+    "build": "medusa plugin:build && node scripts/build-esm-entry.mjs",
     "dev": "medusa plugin:develop",
     "lint": "medusa lint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:admin": "tsc --noEmit -p src/admin/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "medusa plugin:build",
-    "prepare": "medusa plugin:build"
+    "prepublishOnly": "medusa plugin:build && node scripts/build-esm-entry.mjs",
+    "prepare": "medusa plugin:build && node scripts/build-esm-entry.mjs"
   },
   "devDependencies": {
     "@medusajs/admin-sdk": "2.18.0",

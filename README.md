@@ -164,6 +164,49 @@ perfect - the `globalThis` anchor makes double-instantiation harmless.
 
 ---
 
+## What the package ships (dual entry, and why)
+
+`pnpm build` produces two entries under `.medusa/server/src/`, and the `exports`
+map points each consumer at the right one:
+
+| Entry        | Format   | Condition | Who reads it                                     |
+| ------------ | -------- | --------- | ------------------------------------------------ |
+| `index.js`   | CommonJS | `require` | The Medusa server, and any `require()` consumer. |
+| `index.mjs`  | ESM      | `import`  | Bundlers, i.e. every admin build.                |
+| `index.d.ts` | types    | `types`   | `tsc` in a contributor plugin.                   |
+
+The ESM entry is not cosmetic; without it a contributor's column cannot ship.
+`medusa plugin:build` compiles this package with `tsc` to CommonJS, and it
+externalizes declared dependencies - so a contributor's built
+`.medusa/server/src/admin/index.mjs` keeps a bare
+`import { registerProductColumn } from "@zanreal/medusa-admin-kit"`. The host
+app's admin build (`medusa build` -> vite) declares no `rollupOptions.external`,
+so it has to pull that import into the bundle. Vite's default
+`build.commonjsOptions.include` is `[/node_modules/]`, which means a CommonJS
+entry only survives when the package happens to sit under `node_modules`. As a
+workspace package or a git submodule, rollup resolves through the symlink to a
+real path outside `node_modules`, skips CommonJS interop, parses the CommonJS
+entry as ESM, finds no named exports, and kills the whole admin build with
+`"registerProductColumn" is not exported by ".../src/index.js"`. Shipping real
+ESM makes the import statically analyzable wherever the package lives.
+
+`index.mjs` is a single self-contained bundle, so it is a second copy of the
+registry code next to the CommonJS one (and next to the copy `plugin:build`
+inlines into this package's own admin bundle). That is safe for exactly the
+reason above: the store is on `globalThis`, never in module scope. Keep it that
+way. `src/__tests__/built-entry.test.ts` asserts both halves against the real
+build output - that the ESM entry exposes every public binding as a static
+`export { ... }` a bundler with no CommonJS interop can read, and that
+registering through one entry is visible through the other.
+
+If a host's admin build instead fails with **`Rollup failed to resolve import
+"@zanreal/medusa-admin-kit"`**, that is a different problem: the kit is not
+installed anywhere the contributor plugin's built file can resolve it. Add it to
+the host app's dependencies (or to the workspace) so the bare specifier resolves
+from the plugin's real path on disk.
+
+---
+
 ## Column API
 
 ```ts
@@ -285,11 +328,17 @@ list.
 
 ```bash
 pnpm install
-pnpm test            # vitest: registry, context builder, query + column mapping
+pnpm build           # plugin:build (server + admin bundle) then the ESM entry
+pnpm test            # vitest: registry, context builder, query + column mapping,
+                     # and the built entry surface (needs pnpm build first)
 pnpm typecheck       # tsc, server project
 pnpm typecheck:admin # tsc, admin (browser) project
-pnpm build           # medusa plugin:build - compiles server + bundles admin
 ```
+
+`pnpm build` runs `medusa plugin:build` and then `scripts/build-esm-entry.mjs`,
+which emits `.medusa/server/src/index.mjs`. Run it before `pnpm test`, since the
+built-entry test reads that output; `prepare` builds on install and CI builds
+before it tests, so this only bites when you delete `.medusa/` by hand.
 
 The registry and its helpers are framework-free and unit-tested in Node; the
 route and widget are typechecked against the real `@medusajs/ui` types and built
