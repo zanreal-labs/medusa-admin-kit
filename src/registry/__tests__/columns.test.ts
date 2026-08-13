@@ -71,4 +71,47 @@ describe("renderRegisteredCell", () => {
     };
     expect(renderRegisteredCell(def, product)).toBe("same-ref");
   });
+
+  it("calls a sync column's cell with `async` undefined", () => {
+    const def: ProductColumnDef = {
+      cell: (_ctx, async) => (async === undefined ? "sync" : "async"),
+      header: "x",
+      id: "x",
+    };
+    expect(renderRegisteredCell(def, product)).toBe("sync");
+  });
+
+  it("threads an explicit async state through to an async-aware column's cell", () => {
+    const def: ProductColumnDef<ProductColumnProduct, string> = {
+      cell: (_ctx, async) => {
+        if (!async) {
+          return "no-state";
+        }
+        if (async.isLoading) {
+          return "loading";
+        }
+        if (async.error) {
+          return "error";
+        }
+        return `data:${async.data}`;
+      },
+      header: "Allegro",
+      id: "allegro.sync_status",
+      loadData: async () => "3 offers",
+    };
+
+    expect(renderRegisteredCell(def, product, { data: undefined, error: null, isLoading: true })).toBe(
+      "loading",
+    );
+    expect(
+      renderRegisteredCell(def, product, { data: "3 offers", error: null, isLoading: false }),
+    ).toBe("data:3 offers");
+    expect(
+      renderRegisteredCell(def, product, {
+        data: undefined,
+        error: new Error("boom"),
+        isLoading: false,
+      }),
+    ).toBe("error");
+  });
 });

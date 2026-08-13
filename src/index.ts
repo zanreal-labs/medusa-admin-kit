@@ -54,6 +54,7 @@ export type {
 } from "./registry/query";
 
 export type {
+  ProductColumnAsyncState,
   ProductColumnCellContext,
   ProductColumnDef,
   ProductColumnProduct,

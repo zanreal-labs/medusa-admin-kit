@@ -63,9 +63,10 @@ function getStore(): RegistryStore {
  *
  * @throws {TypeError} If `id` is not a non-empty string or `cell` is not a function.
  */
-export function registerProductColumn<TProduct extends ProductColumnProduct = ProductColumnProduct>(
-  def: ProductColumnDef<TProduct>,
-): void {
+export function registerProductColumn<
+  TProduct extends ProductColumnProduct = ProductColumnProduct,
+  TData = unknown,
+>(def: ProductColumnDef<TProduct, TData>): void {
   // These run in the admin (browser) bundle, not an API route, so a plain
   // TypeError is the right signal for a programming mistake by a contributor.
   // MedusaError is a server construct that maps to an HTTP status and pulls in

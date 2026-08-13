@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { buildProductColumnContext } from "./context";
-import type { ProductColumnDef, ProductColumnProduct } from "./types";
+import type { ProductColumnAsyncState, ProductColumnDef, ProductColumnProduct } from "./types";
 
 /**
  * The kit's own base columns, in render order. They always come first; every
@@ -51,12 +51,16 @@ export function resolveProductColumns<TProduct extends ProductColumnProduct>(
 /**
  * Render a registered column's cell for a single product row: build the typed
  * {@link buildProductColumnContext} and hand it to the column's `cell`. This is
- * exactly what the route does per row, extracted so the wiring can be tested in
- * Node without a React renderer.
+ * the sync half of what the route does per row (the route itself wraps this
+ * with the async-fetch lifecycle for columns that set `loadData` - see
+ * `RegisteredProductCell` under `src/admin/`), extracted so the wiring, and a
+ * column's loading/data/error render branches, can be asserted in Node without
+ * a React renderer: pass `async` directly to exercise a given state.
  */
-export function renderRegisteredCell<TProduct extends ProductColumnProduct>(
-  def: ProductColumnDef<TProduct>,
+export function renderRegisteredCell<TProduct extends ProductColumnProduct, TData = unknown>(
+  def: ProductColumnDef<TProduct, TData>,
   product: TProduct,
+  async?: ProductColumnAsyncState<TData>,
 ): ReactNode {
-  return def.cell(buildProductColumnContext(product));
+  return def.cell(buildProductColumnContext(product), async);
 }

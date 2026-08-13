@@ -12,7 +12,7 @@ import {
 } from "@medusajs/ui";
 import type { DataTableColumnDef, DataTablePaginationState } from "@medusajs/ui";
 import { useEffect, useMemo, useState } from "react";
-import { renderRegisteredCell, resolveProductColumns } from "../../../registry/columns";
+import { resolveProductColumns } from "../../../registry/columns";
 import type { BaseProductColumnId } from "../../../registry/columns";
 import { buildProductColumnContext } from "../../../registry/context";
 import { getRegisteredProductColumns } from "../../../registry/product-columns";
@@ -22,6 +22,7 @@ import {
   mapProductListResponse,
 } from "../../../registry/query";
 import type { ProductColumnDef } from "../../../registry/types";
+import { RegisteredProductCell } from "../../components/registered-product-cell";
 import { sdk } from "../../lib/sdk";
 
 type AdminProduct = HttpTypes.AdminProduct;
@@ -121,7 +122,7 @@ function buildRegisteredColumn(
   def: ProductColumnDef<AdminProduct>,
 ): DataTableColumnDef<AdminProduct, unknown> {
   return columnHelper.display({
-    cell: ({ row }) => renderRegisteredCell(def, row.original),
+    cell: ({ row }) => <RegisteredProductCell def={def} product={row.original} />,
     header: def.header,
     id: def.id,
   });
@@ -201,10 +202,10 @@ const ProductsPage = () => {
       <DataTable instance={instance}>
         <DataTable.Toolbar className="flex flex-col items-start justify-between gap-y-3 px-6 py-4 md:flex-row md:items-center">
           <div className="flex flex-col gap-y-1">
-            <Heading level="h2">Products</Heading>
+            <Heading level="h2">Catalog</Heading>
             <Text className="text-ui-fg-subtle" size="small">
-              Extensible products list. Columns contributed by installed plugins render alongside
-              the base columns.
+              Extensible products list, separate from the stock Products page. Columns contributed
+              by installed plugins render alongside the base columns.
             </Text>
           </div>
           <DataTable.Search placeholder="Search products" />
@@ -216,9 +217,13 @@ const ProductsPage = () => {
   );
 };
 
+// A dedicated nav route, deliberately not "/app/products" - the stock admin
+// already owns that path for core product CRUD. This route mounts at
+// "/app/catalog" (the folder name below is the route path) with its own
+// sidebar entry, so it cannot replace or shadow the stock Products page.
 export const config = defineRouteConfig({
   icon: Tag,
-  label: "Products",
+  label: "Catalog",
 });
 
 export default ProductsPage;

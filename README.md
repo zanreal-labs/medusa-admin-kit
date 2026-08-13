@@ -29,11 +29,13 @@ a column definition; the kit renders them all in a single table, ordered by
 priority. The stock admin products page keeps doing product CRUD; this route is
 the shared read surface plugins can decorate.
 
-The route lives at `/app/products` and adds a **Products** item to the sidebar.
-Because the stock admin already occupies that path, treat this as the extensible
-replacement for the stock list. If you would rather mount it beside the stock
-list, rename the folder (e.g. `src/admin/routes/catalog/page.tsx`) in a fork, or
-open an issue - the route path is the only thing that changes.
+The route lives at `/app/catalog` and adds a **Catalog** item to the sidebar,
+deliberately separate from the stock admin's own `/app/products` page - it does
+not replace or shadow it. A store gets both: the stock Products page for core
+product CRUD, and Catalog as the shared, extensible read surface plugins
+decorate. The route path is just the folder name under `src/admin/routes/`, so
+a fork can rename it (and the sidebar `label` in `page.tsx`) to mount somewhere
+else without touching anything under `src/registry/`.
 
 ---
 
@@ -165,15 +167,17 @@ perfect - the `globalThis` anchor makes double-instantiation harmless.
 ## Column API
 
 ```ts
-interface ProductColumnDef<TProduct = ProductColumnProduct> {
+interface ProductColumnDef<TProduct = ProductColumnProduct, TData = unknown> {
   /** Stable, unique, namespaced id. Re-registering the same id replaces it. */
   id: string;
   /** A string, or a render function for a custom header. */
   header: string | (() => ReactNode);
   /** Sort key among registered columns. Lower first; ties keep registration order. Default 0. */
   priority?: number;
-  /** Renders the cell for one product row. */
-  cell: (ctx: ProductColumnCellContext<TProduct>) => ReactNode;
+  /** Renders the cell for one product row. `async` is set only when `loadData` is. */
+  cell: (ctx: ProductColumnCellContext<TProduct>, async?: ProductColumnAsyncState<TData>) => ReactNode;
+  /** Optional async loader for a cell backed by a network call. See "Async cells" below. */
+  loadData?: (ctx: ProductColumnCellContext<TProduct>) => Promise<TData>;
 }
 ```
 
@@ -192,6 +196,55 @@ interface ProductColumnCellContext<TProduct> {
 
 The products API is queried with variant `id`, `title` and `sku` in `fields`, so
 columns can key on SKU without a second round-trip.
+
+### Async cells
+
+Most columns key on data already in `ctx` (SKUs, variant count) and never need
+`loadData`. A column backed by a network call - an Allegro offer-status lookup,
+a product-costs margin lookup - sets `loadData` instead of doing the fetch
+inline in `cell`:
+
+```tsx
+registerProductColumn({
+  id: "allegro.offer_status",
+  header: "Allegro",
+  priority: 10,
+  loadData: async (ctx) => fetchOfferStatus(ctx.skus), // aggregate variant -> product here
+  cell: (_ctx, async) => {
+    if (!async || async.isLoading) {
+      return <Text size="small">...</Text>; // skeleton; also the no-JS-yet render
+    }
+    if (async.error) {
+      return (
+        <Text className="text-ui-fg-error" size="small">
+          -
+        </Text>
+      );
+    }
+    return <Badge>{async.data}</Badge>; // e.g. "3 offers / 1 conflict"
+  },
+});
+```
+
+The base table renders immediately and never awaits `loadData` - each row
+starts in `async.isLoading: true` and re-renders once the fetch settles, into
+either `async.data` or `async.error`. `cell` is called with `async: undefined`
+only for columns that never set `loadData`; a `loadData` column always gets a
+defined `async`, so it never has to guess which shape it is in. If `cell`
+throws - synchronously, or because it does not handle `async.error` and derefs
+`async.data` while `undefined` - the kit catches it and renders an inline error
+for that one cell only; it does not take down the row, the table, or any other
+plugin's column. A plugin that is not installed never calls
+`registerProductColumn` at all, so its column, and any risk from it, simply
+does not exist - there is nothing to degrade.
+
+```ts
+interface ProductColumnAsyncState<TData> {
+  data: TData | undefined; // set once loadData resolves
+  isLoading: boolean;
+  error: unknown; // set if loadData rejected
+}
+```
 
 ### Registry functions
 
@@ -212,12 +265,16 @@ query mappers `buildProductListQuery` / `mapProductListResponse`.
 
 ## How the ZanReal plugins register
 
-- **Allegro** (`@zanreal/medusa-allegro`) registers an `allegro.sync_status`
-  column - a per-row badge showing whether the product's SKUs are listed on
-  Allegro - from a widget in its own `src/admin/widgets/`, replacing its current
-  standalone summary line.
+- **Allegro** (`@zanreal/medusa-allegro`) registers an `allegro.offer_status`
+  column - a per-row badge aggregating each SKU's Allegro offer state to the
+  product level (e.g. "3 offers / 1 conflict") - via `loadData`, from a widget
+  in its own `src/admin/widgets/`.
 - **product-costs** (`@zanreal/medusa-product-costs`) registers a
-  `product-costs.margin` column showing the cost/margin it owns.
+  `product-costs.margin` column showing the cost/margin it owns, also via
+  `loadData`.
+
+Both are async columns: the lookup is a network call keyed by SKU, so neither
+blocks the base table's render.
 
 Each ships one small registration widget; neither builds a competing products
 list.
