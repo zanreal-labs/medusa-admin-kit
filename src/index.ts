@@ -36,7 +36,11 @@ export {
   unregisterVariantColumn,
 } from "./registry/variant-columns";
 
-export { buildVariantColumnContext, extractSkus, normalizeVariant } from "./registry/context";
+export {
+  buildVariantColumnContext,
+  extractSkus,
+  normalizeVariant,
+} from "./registry/context";
 
 export {
   BASE_CATALOG_COLUMN_IDS,
@@ -44,14 +48,19 @@ export {
   resolveCatalogColumns,
 } from "./registry/columns";
 
-export type { BaseCatalogColumnId, ResolvedCatalogColumn } from "./registry/columns";
+export type {
+  BaseCatalogColumnId,
+  ResolvedCatalogColumn,
+} from "./registry/columns";
 
 export {
   formatAmount,
   readAmount,
   readVariantSrp,
+  readVariantSrpMoney,
   selectVariantPrice,
   SRP_METADATA_KEY,
+  srpCurrencyKey,
 } from "./registry/money";
 
 export type {

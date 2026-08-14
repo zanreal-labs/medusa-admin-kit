@@ -3,8 +3,10 @@ import {
   formatAmount,
   readAmount,
   readVariantSrp,
+  readVariantSrpMoney,
   selectVariantPrice,
   SRP_METADATA_KEY,
+  srpCurrencyKey,
 } from "../money";
 
 /**
@@ -163,6 +165,66 @@ describe("readVariantSrp", () => {
   it("uses a caller-supplied key, matching a store that renamed it", () => {
     expect(SRP_METADATA_KEY).toBe("srp");
     expect(readVariantSrp({ metadata: { rrp: "12" } }, "rrp")).toBe(12);
+  });
+});
+
+describe("readVariantSrpMoney", () => {
+  it("pairs the amount with the currency recorded beside it", () => {
+    expect(readVariantSrpMoney({ metadata: { srp: "399.00", srp_currency: "pln" } })).toEqual({
+      amount: 399,
+      currency: "PLN",
+    });
+  });
+
+  it("returns a null currency when none was recorded", () => {
+    // A bare number is the honest rendering. Borrowing the store's default would
+    // be inventing a fact, and this store sells in three currencies.
+    expect(readVariantSrpMoney({ metadata: { srp: "399.00" } })).toEqual({
+      amount: 399,
+      currency: null,
+    });
+    expect(readVariantSrpMoney({ metadata: { srp: "399.00", srp_currency: "  " } })).toEqual({
+      amount: 399,
+      currency: null,
+    });
+    expect(readVariantSrpMoney({ metadata: { srp: "399.00", srp_currency: 978 } })).toEqual({
+      amount: 399,
+      currency: null,
+    });
+  });
+
+  it("never labels a variant's amount with the product's currency", () => {
+    // The amount and its currency are one fact. Reading them from different bags
+    // is how a PLN figure ends up displayed as EUR.
+    expect(
+      readVariantSrpMoney({
+        metadata: { srp: "350" },
+        product: { metadata: { srp: "399", srp_currency: "EUR" } },
+      }),
+    ).toEqual({ amount: 350, currency: null });
+  });
+
+  it("takes both from the product when the variant carries no amount", () => {
+    expect(
+      readVariantSrpMoney({
+        metadata: {},
+        product: { metadata: { srp: "399", srp_currency: "EUR" } },
+      }),
+    ).toEqual({ amount: 399, currency: "EUR" });
+  });
+
+  it("returns null when there is no amount at all", () => {
+    expect(readVariantSrpMoney({})).toBeNull();
+    expect(readVariantSrpMoney({ metadata: { srp_currency: "PLN" } })).toBeNull();
+  });
+
+  it("derives the currency key from a renamed amount key", () => {
+    expect(srpCurrencyKey()).toBe("srp_currency");
+    expect(srpCurrencyKey("rrp")).toBe("rrp_currency");
+    expect(readVariantSrpMoney({ metadata: { rrp: "12", rrp_currency: "usd" } }, "rrp")).toEqual({
+      amount: 12,
+      currency: "USD",
+    });
   });
 });
 

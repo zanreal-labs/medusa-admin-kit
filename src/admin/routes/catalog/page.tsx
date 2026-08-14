@@ -10,19 +10,29 @@ import {
   Text,
   useDataTable,
 } from "@medusajs/ui";
-import type { DataTableColumnDef, DataTablePaginationState } from "@medusajs/ui";
+import type {
+  DataTableColumnDef,
+  DataTablePaginationState,
+} from "@medusajs/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { resolveCatalogColumns } from "../../../registry/columns";
 import type { BaseCatalogColumnId } from "../../../registry/columns";
-import { readVariantSrp, selectVariantPrice } from "../../../registry/money";
+import {
+  readVariantSrp,
+  readVariantSrpMoney,
+  selectVariantPrice,
+} from "../../../registry/money";
 import {
   buildVariantListQuery,
   DEFAULT_PAGE_SIZE,
   mapVariantListResponse,
 } from "../../../registry/query";
-import { unwrapClickedRow, variantDetailHref } from "../../../registry/row-link";
+import {
+  unwrapClickedRow,
+  variantDetailHref,
+} from "../../../registry/row-link";
 import type { VariantColumnDef } from "../../../registry/types";
 import { getRegisteredVariantColumns } from "../../../registry/variant-columns";
 import { CatalogThumbnail } from "../../components/catalog-thumbnail";
@@ -36,7 +46,9 @@ type VariantRow = HttpTypes.AdminProductVariant;
 const columnHelper = createDataTableColumnHelper<VariantRow>();
 
 /** Map a product status to a `StatusBadge` colour. */
-function statusColor(status?: string | null): "green" | "orange" | "red" | "grey" {
+function statusColor(
+  status?: string | null,
+): "green" | "orange" | "red" | "grey" {
   switch (status) {
     case "published": {
       return "green";
@@ -54,7 +66,9 @@ function statusColor(status?: string | null): "green" | "orange" | "red" | "grey
 }
 
 /** Build one of the kit's base columns by id. */
-function buildBaseColumn(id: BaseCatalogColumnId): DataTableColumnDef<VariantRow, unknown> {
+function buildBaseColumn(
+  id: BaseCatalogColumnId,
+): DataTableColumnDef<VariantRow, unknown> {
   switch (id) {
     case "thumbnail": {
       return columnHelper.display({
@@ -113,7 +127,11 @@ function buildBaseColumn(id: BaseCatalogColumnId): DataTableColumnDef<VariantRow
       return columnHelper.display({
         cell: ({ row }) => {
           const status = row.original.product?.status;
-          return <StatusBadge color={statusColor(status)}>{status ?? "unknown"}</StatusBadge>;
+          return (
+            <StatusBadge color={statusColor(status)}>
+              {status ?? "unknown"}
+            </StatusBadge>
+          );
         },
         header: "Status",
         id: "status",
@@ -128,43 +146,49 @@ function buildBaseColumn(id: BaseCatalogColumnId): DataTableColumnDef<VariantRow
       // value for this column to carry. Sorting stays off - the helper's
       // default - because the API paginates server-side and sorting one page
       // client-side would order the page, not the catalogue.
-      return columnHelper.accessor((row): unknown => selectVariantPrice(row.prices)?.price.amount, {
-        align: "right",
-        cell: ({ row }) => {
-          const selected = selectVariantPrice(row.original.prices);
-          return (
-            <MoneyCell
-              money={selected?.price ?? null}
-              otherCount={selected?.otherCount ?? 0}
-              title={
-                selected
-                  ? undefined
-                  : "This variant has no price set. That is normal for a variant that is not offered for sale."
-              }
-            />
-          );
+      return columnHelper.accessor(
+        (row): unknown => selectVariantPrice(row.prices)?.price.amount,
+        {
+          align: "right",
+          cell: ({ row }) => {
+            const selected = selectVariantPrice(row.original.prices);
+            return (
+              <MoneyCell
+                money={selected?.price ?? null}
+                otherCount={selected?.otherCount ?? 0}
+                title={
+                  selected
+                    ? undefined
+                    : "This variant has no price set. That is normal for a variant that is not offered for sale."
+                }
+              />
+            );
+          },
+          header: "Shop",
+          id: "price",
         },
-        header: "Shop",
-        id: "price",
-      });
+      );
     }
     case "srp": {
       return columnHelper.accessor((row): unknown => readVariantSrp(row), {
         align: "right",
         cell: ({ row }) => {
-          const srp = readVariantSrp(row.original);
-          // `metadata.srp` is a bare amount: the store types a number, and
-          // nothing records what currency it is in. Rendering it under the shop
-          // price's currency would be inventing a fact, so the cell shows the
-          // number with no currency and says why on hover, rather than
-          // labelling it with a currency the data does not claim.
+          const srp = readVariantSrpMoney(row.original);
+          // The currency comes from `srp_currency` beside the amount, and only
+          // from there. Rendering an unlabelled amount under the shop price's
+          // currency would be inventing a fact - this figure can predate the
+          // price beside it, or come from a supplier who quotes in another
+          // currency - so an SRP with no recorded currency stays a bare number
+          // and says so on hover.
           return (
             <MoneyCell
-              money={srp === null ? null : { amount: srp, currency: null }}
+              money={srp}
               title={
                 srp === null
                   ? "No `srp` in this variant's or its product's metadata."
-                  : "SRP from metadata. It is stored as a bare amount, with no currency of its own."
+                  : srp.currency
+                    ? "SRP from metadata, in the currency recorded beside it."
+                    : "SRP from metadata. No `srp_currency` is recorded beside it, so no currency is shown."
               }
             />
           );
@@ -196,9 +220,12 @@ function useCatalogColumns(): DataTableColumnDef<VariantRow, unknown>[] {
   // populated. Computing once per mount is enough; a real change to the set of
   // installed plugins is a full admin reload.
   return useMemo(() => {
-    const registered = getRegisteredVariantColumns() as VariantColumnDef<AdminProduct>[];
+    const registered =
+      getRegisteredVariantColumns() as VariantColumnDef<AdminProduct>[];
     return resolveCatalogColumns<AdminProduct>(registered).map((entry) =>
-      entry.source === "base" ? buildBaseColumn(entry.id) : buildRegisteredColumn(entry.def),
+      entry.source === "base"
+        ? buildBaseColumn(entry.id)
+        : buildRegisteredColumn(entry.def),
     );
   }, []);
 }
@@ -211,7 +238,10 @@ const CatalogPage = () => {
     pageSize: DEFAULT_PAGE_SIZE,
   });
   const [search, setSearch] = useState("");
-  const [result, setResult] = useState<{ variants: VariantRow[]; count: number }>({
+  const [result, setResult] = useState<{
+    variants: VariantRow[];
+    count: number;
+  }>({
     count: 0,
     variants: [],
   });
@@ -245,7 +275,10 @@ const CatalogPage = () => {
   }, [pagination.pageIndex, pagination.pageSize, search]);
 
   const onRowClick = useCallback(
-    (event: ReactMouseEvent<HTMLTableRowElement, MouseEvent>, clicked: VariantRow) => {
+    (
+      event: ReactMouseEvent<HTMLTableRowElement, MouseEvent>,
+      clicked: VariantRow,
+    ) => {
       const href = variantDetailHref(unwrapClickedRow(clicked));
       if (!href) {
         return;
@@ -285,9 +318,9 @@ const CatalogPage = () => {
           <div className="flex flex-col gap-y-1">
             <Heading level="h2">Catalog</Heading>
             <Text className="text-ui-fg-subtle" size="small">
-              One row per variant, separate from the stock Products page. Columns contributed by
-              installed plugins render alongside the base columns. Click a row to open that
-              variant.
+              One row per variant, separate from the stock Products page.
+              Columns contributed by installed plugins render alongside the base
+              columns. Click a row to open that variant.
             </Text>
           </div>
           <DataTable.Search placeholder="Search variants" />

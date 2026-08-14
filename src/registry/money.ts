@@ -172,7 +172,9 @@ export interface VariantPriceSelection {
 /** Whether a price is the plain per-unit one rather than a scoped or tiered one. */
 function isPlainPrice(price: CatalogPrice): boolean {
   const hasRules = Object.keys(price.rules ?? {}).length > 0;
-  return !hasRules && price.min_quantity === null && price.max_quantity === null;
+  return (
+    !hasRules && price.min_quantity === null && price.max_quantity === null
+  );
 }
 
 /**
@@ -197,19 +199,22 @@ export function selectVariantPrice(
     return null;
   }
 
-  const readable = prices.flatMap((price): { money: CatalogMoney; plain: boolean }[] => {
-    const amount = readAmount(price.amount);
-    if (amount === null) {
-      return [];
-    }
-    const currency = typeof price.currency_code === "string" ? price.currency_code : null;
-    return [
-      {
-        money: { amount, currency: currency ? currency.toUpperCase() : null },
-        plain: isPlainPrice(price),
-      },
-    ];
-  });
+  const readable = prices.flatMap(
+    (price): { money: CatalogMoney; plain: boolean }[] => {
+      const amount = readAmount(price.amount);
+      if (amount === null) {
+        return [];
+      }
+      const currency =
+        typeof price.currency_code === "string" ? price.currency_code : null;
+      return [
+        {
+          money: { amount, currency: currency ? currency.toUpperCase() : null },
+          plain: isPlainPrice(price),
+        },
+      ];
+    },
+  );
   if (readable.length === 0) {
     return null;
   }
@@ -238,11 +243,75 @@ export interface SrpSource {
  * with exactly the same variant-then-product precedence. A column that skipped
  * the fallback would show a dash for a variant whose SRP is very much in use.
  *
- * The value is a **bare amount**: `metadata.srp` carries no currency, so the
- * result is a number and the cell is responsible for not inventing one.
+ * The value is a **bare amount**. Use {@link readVariantSrpMoney} when the cell
+ * needs the currency as well; this one stays numeric because that is what the
+ * table sorts and what the Allegro ceiling compares.
  */
-export function readVariantSrp(row: SrpSource, key: string = SRP_METADATA_KEY): number | null {
-  return readAmount(row.metadata?.[key]) ?? readAmount(row.product?.metadata?.[key]);
+export function readVariantSrp(
+  row: SrpSource,
+  key: string = SRP_METADATA_KEY,
+): number | null {
+  return (
+    readAmount(row.metadata?.[key]) ?? readAmount(row.product?.metadata?.[key])
+  );
+}
+
+/**
+ * The metadata key an SRP's currency is stored under, derived from the amount's
+ * own key so a store that renamed `srp` gets the matching sibling for free.
+ */
+export function srpCurrencyKey(key: string = SRP_METADATA_KEY): string {
+  return `${key}_currency`;
+}
+
+/** An ISO code out of a metadata bag, uppercased, or null when unusable. */
+function readCurrency(
+  bag: Record<string, unknown> | null | undefined,
+  key: string,
+): string | null {
+  const value = bag?.[key];
+  if (typeof value !== "string") {
+    return null;
+  }
+  const code = value.trim().toUpperCase();
+  return code === "" ? null : code;
+}
+
+/**
+ * A variant's SRP with the currency it is denominated in, when one was recorded.
+ *
+ * The currency is a **sibling key** (`srp_currency` beside `srp`) rather than a
+ * shape change, because the amount is read by the Allegro price sync as a plain
+ * number and turning it into an object would break that reader. It is looked up
+ * in the same bag the amount came from, never across the two: a product-wide
+ * currency has no business labelling a variant's own amount, and the pair
+ * disagreeing is exactly how a PLN figure ends up displayed as EUR.
+ *
+ * A missing sibling yields `currency: null`, which the cell renders as a bare
+ * number. Falling back to the store's default would be inventing a fact - this
+ * store sells in three currencies - and a wrong currency on a price is worse
+ * than an absent one.
+ */
+export function readVariantSrpMoney(
+  row: SrpSource,
+  key: string = SRP_METADATA_KEY,
+): CatalogMoney | null {
+  const currencyKey = srpCurrencyKey(key);
+
+  const own = readAmount(row.metadata?.[key]);
+  if (own !== null) {
+    return { amount: own, currency: readCurrency(row.metadata, currencyKey) };
+  }
+
+  const inherited = readAmount(row.product?.metadata?.[key]);
+  if (inherited !== null) {
+    return {
+      amount: inherited,
+      currency: readCurrency(row.product?.metadata, currencyKey),
+    };
+  }
+
+  return null;
 }
 
 /**
