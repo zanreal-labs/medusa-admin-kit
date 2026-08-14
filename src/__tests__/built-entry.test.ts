@@ -43,23 +43,34 @@ import { afterAll, describe, expect, it } from "vitest";
 
 /** The runtime bindings a contributor plugin is allowed to import by name. */
 const PUBLIC_EXPORTS = [
-  "BASE_PRODUCT_COLUMN_IDS",
+  "BASE_CATALOG_COLUMN_IDS",
   "DEFAULT_PAGE_SIZE",
   "PAGE_SIZE_OPTIONS",
-  "PRODUCT_LIST_FIELDS",
-  "buildProductColumnContext",
-  "buildProductListQuery",
-  "clearProductColumns",
+  "VARIANT_LIST_FIELDS",
+  "buildVariantColumnContext",
+  "buildVariantListQuery",
+  "clearVariantColumns",
   "extractSkus",
+  "getRegisteredVariantColumns",
+  "getVariantColumn",
+  "hasVariantColumn",
+  "mapVariantListResponse",
+  "normalizeVariant",
+  "pageCount",
+  "registerVariantColumn",
+  "renderRegisteredCell",
+  "resolveCatalogColumns",
+  "unregisterVariantColumn",
+  "unwrapClickedRow",
+  "variantDetailHref",
+  // The deprecated product-named registration aliases are part of the shipped
+  // surface too: an unmigrated contributor's built bundle still imports these
+  // by name, and rollup fails the whole host admin build if they are missing.
+  "clearProductColumns",
   "getProductColumn",
   "getRegisteredProductColumns",
   "hasProductColumn",
-  "mapProductListResponse",
-  "normalizeVariant",
-  "pageCount",
   "registerProductColumn",
-  "renderRegisteredCell",
-  "resolveProductColumns",
   "unregisterProductColumn",
 ] as const;
 
@@ -166,9 +177,9 @@ describe("built package entry", () => {
 describe("built entries share one registry", () => {
   afterAll(async () => {
     const esm = (await import(pathToFileURL(esmEntry).href)) as {
-      clearProductColumns: () => void;
+      clearVariantColumns: () => void;
     };
-    esm.clearProductColumns();
+    esm.clearVariantColumns();
   });
 
   it("registers through the ESM copy and reads it back through the CommonJS copy", async () => {
@@ -181,7 +192,12 @@ describe("built entries share one registry", () => {
     // anyone ever moves the store into a module-level variable, the copies
     // split, a contributor's column vanishes from the table, and this fails.
     const esm = (await import(pathToFileURL(esmEntry).href)) as {
-      clearProductColumns: () => void;
+      clearVariantColumns: () => void;
+      registerVariantColumn: (def: {
+        id: string;
+        header: string;
+        cell: () => string;
+      }) => void;
       registerProductColumn: (def: {
         id: string;
         header: string;
@@ -189,20 +205,31 @@ describe("built entries share one registry", () => {
       }) => void;
     };
     const cjs = createRequire(path.join(packageRoot, "package.json"))(cjsEntry) as {
-      getRegisteredProductColumns: () => { id: string }[];
+      getRegisteredVariantColumns: () => { id: string }[];
+      hasVariantColumn: (id: string) => boolean;
       hasProductColumn: (id: string) => boolean;
     };
 
-    esm.clearProductColumns();
-    esm.registerProductColumn({
+    esm.clearVariantColumns();
+    esm.registerVariantColumn({
       cell: () => "ok",
       header: "Dual entry",
       id: "test.dual-entry",
     });
 
-    expect(cjs.hasProductColumn("test.dual-entry")).toBe(true);
-    expect(cjs.getRegisteredProductColumns().map((column) => column.id)).toContain(
+    expect(cjs.hasVariantColumn("test.dual-entry")).toBe(true);
+    expect(cjs.getRegisteredVariantColumns().map((column) => column.id)).toContain(
       "test.dual-entry",
     );
+
+    // The deprecated alias in one built copy must reach the same store the
+    // other copy reads, or an unmigrated contributor loses its column.
+    esm.registerProductColumn({
+      cell: () => "ok",
+      header: "Legacy alias",
+      id: "test.dual-entry-legacy",
+    });
+    expect(cjs.hasProductColumn("test.dual-entry-legacy")).toBe(true);
+    expect(cjs.hasVariantColumn("test.dual-entry-legacy")).toBe(true);
   });
 });

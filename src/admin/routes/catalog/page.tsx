@@ -11,23 +11,27 @@ import {
   useDataTable,
 } from "@medusajs/ui";
 import type { DataTableColumnDef, DataTablePaginationState } from "@medusajs/ui";
-import { useEffect, useMemo, useState } from "react";
-import { resolveProductColumns } from "../../../registry/columns";
-import type { BaseProductColumnId } from "../../../registry/columns";
-import { buildProductColumnContext } from "../../../registry/context";
-import { getRegisteredProductColumns } from "../../../registry/product-columns";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { resolveCatalogColumns } from "../../../registry/columns";
+import type { BaseCatalogColumnId } from "../../../registry/columns";
 import {
-  buildProductListQuery,
+  buildVariantListQuery,
   DEFAULT_PAGE_SIZE,
-  mapProductListResponse,
+  mapVariantListResponse,
 } from "../../../registry/query";
-import type { ProductColumnDef } from "../../../registry/types";
-import { RegisteredProductCell } from "../../components/registered-product-cell";
+import { unwrapClickedRow, variantDetailHref } from "../../../registry/row-link";
+import type { VariantColumnDef } from "../../../registry/types";
+import { getRegisteredVariantColumns } from "../../../registry/variant-columns";
+import { CatalogThumbnail } from "../../components/catalog-thumbnail";
+import { RegisteredVariantCell } from "../../components/registered-variant-cell";
 import { sdk } from "../../lib/sdk";
 
 type AdminProduct = HttpTypes.AdminProduct;
+type VariantRow = HttpTypes.AdminProductVariant;
 
-const columnHelper = createDataTableColumnHelper<AdminProduct>();
+const columnHelper = createDataTableColumnHelper<VariantRow>();
 
 /** Map a product status to a `StatusBadge` colour. */
 function statusColor(status?: string | null): "green" | "orange" | "red" | "grey" {
@@ -48,67 +52,69 @@ function statusColor(status?: string | null): "green" | "orange" | "red" | "grey
 }
 
 /** Build one of the kit's base columns by id. */
-function buildBaseColumn(id: BaseProductColumnId): DataTableColumnDef<AdminProduct, unknown> {
+function buildBaseColumn(id: BaseCatalogColumnId): DataTableColumnDef<VariantRow, unknown> {
   switch (id) {
     case "thumbnail": {
       return columnHelper.display({
-        cell: ({ row }) => {
-          const { thumbnail } = row.original;
-          return thumbnail ? (
-            // biome-ignore lint/nursery/noImgElement: the admin has no next/image; a plain img is correct here.
-            <img alt="" className="h-8 w-8 rounded object-cover" src={thumbnail} />
-          ) : (
-            <div className="h-8 w-8 rounded bg-ui-bg-component" />
-          );
-        },
+        cell: ({ row }) => (
+          // A variant may carry its own image; otherwise the product's is the
+          // right thing to show, and when there is neither `CatalogThumbnail`
+          // renders the admin's own placeholder rather than an empty square.
+          <CatalogThumbnail
+            alt={row.original.title ?? ""}
+            src={row.original.thumbnail ?? row.original.product?.thumbnail}
+          />
+        ),
         header: "",
         id: "thumbnail",
       });
     }
-    case "title": {
+    case "product": {
       return columnHelper.display({
         cell: ({ row }) => (
           <span className="txt-compact-small-plus text-ui-fg-base">
-            {row.original.title ?? "-"}
+            {row.original.product?.title ?? "-"}
           </span>
         ),
-        header: "Title",
-        id: "title",
+        header: "Product",
+        id: "product",
       });
     }
-    case "handle": {
+    case "variant": {
+      return columnHelper.display({
+        cell: ({ row }) => (
+          <Text className="text-ui-fg-subtle" size="small">
+            {row.original.title ?? "-"}
+          </Text>
+        ),
+        header: "Variant",
+        id: "variant",
+      });
+    }
+    case "sku": {
       return columnHelper.display({
         cell: ({ row }) => {
-          const { handle } = row.original;
-          return (
-            <Text className="text-ui-fg-subtle" size="small">
-              {handle ? `/${handle}` : "-"}
+          const { sku } = row.original;
+          return sku ? (
+            <Text size="small">{sku}</Text>
+          ) : (
+            <Text className="text-ui-fg-muted" size="small">
+              no sku
             </Text>
           );
         },
-        header: "Handle",
-        id: "handle",
+        header: "SKU",
+        id: "sku",
       });
     }
     case "status": {
       return columnHelper.display({
         cell: ({ row }) => {
-          const { status } = row.original;
+          const status = row.original.product?.status;
           return <StatusBadge color={statusColor(status)}>{status ?? "unknown"}</StatusBadge>;
         },
         header: "Status",
         id: "status",
-      });
-    }
-    case "sku_summary": {
-      return columnHelper.display({
-        cell: ({ row }) => {
-          const ctx = buildProductColumnContext(row.original);
-          const label = `${ctx.variantCount} ${ctx.variantCount === 1 ? "variant" : "variants"}`;
-          return <Text size="small">{ctx.firstSku ? `${label} - ${ctx.firstSku}` : label}</Text>;
-        },
-        header: "SKUs",
-        id: "sku_summary",
       });
     }
     default: {
@@ -119,60 +125,61 @@ function buildBaseColumn(id: BaseProductColumnId): DataTableColumnDef<AdminProdu
 
 /** Wrap a contributed column definition as a `@medusajs/ui` display column. */
 function buildRegisteredColumn(
-  def: ProductColumnDef<AdminProduct>,
-): DataTableColumnDef<AdminProduct, unknown> {
+  def: VariantColumnDef<AdminProduct>,
+): DataTableColumnDef<VariantRow, unknown> {
   return columnHelper.display({
-    cell: ({ row }) => <RegisteredProductCell def={def} product={row.original} />,
+    cell: ({ row }) => <RegisteredVariantCell def={def} row={row.original} />,
     header: def.header,
     id: def.id,
   });
 }
 
-function useProductColumns(): DataTableColumnDef<AdminProduct, unknown>[] {
+function useCatalogColumns(): DataTableColumnDef<VariantRow, unknown>[] {
   // Registration happens at admin boot (contributor widgets run before any
   // navigation), so by the time this route mounts the registry is fully
   // populated. Computing once per mount is enough; a real change to the set of
   // installed plugins is a full admin reload.
   return useMemo(() => {
-    const registered = getRegisteredProductColumns() as ProductColumnDef<AdminProduct>[];
-    return resolveProductColumns<AdminProduct>(registered).map((entry) =>
+    const registered = getRegisteredVariantColumns() as VariantColumnDef<AdminProduct>[];
+    return resolveCatalogColumns<AdminProduct>(registered).map((entry) =>
       entry.source === "base" ? buildBaseColumn(entry.id) : buildRegisteredColumn(entry.def),
     );
   }, []);
 }
 
-const ProductsPage = () => {
-  const columns = useProductColumns();
+const CatalogPage = () => {
+  const columns = useCatalogColumns();
+  const navigate = useNavigate();
   const [pagination, setPagination] = useState<DataTablePaginationState>({
     pageIndex: 0,
     pageSize: DEFAULT_PAGE_SIZE,
   });
   const [search, setSearch] = useState("");
-  const [result, setResult] = useState<{ products: AdminProduct[]; count: number }>({
+  const [result, setResult] = useState<{ variants: VariantRow[]; count: number }>({
     count: 0,
-    products: [],
+    variants: [],
   });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    const query = buildProductListQuery({
+    const query = buildVariantListQuery({
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize,
       search,
     });
-    sdk.admin.product
+    sdk.admin.productVariant
       .list(query)
       .then((response) => {
         if (!cancelled) {
-          setResult(mapProductListResponse<AdminProduct>(response));
+          setResult(mapVariantListResponse<VariantRow>(response));
           setIsLoading(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setResult({ count: 0, products: [] });
+          setResult({ count: 0, variants: [] });
           setIsLoading(false);
         }
       });
@@ -181,11 +188,29 @@ const ProductsPage = () => {
     };
   }, [pagination.pageIndex, pagination.pageSize, search]);
 
+  const onRowClick = useCallback(
+    (event: ReactMouseEvent<HTMLTableRowElement, MouseEvent>, clicked: VariantRow) => {
+      const href = variantDetailHref(unwrapClickedRow(clicked));
+      if (!href) {
+        return;
+      }
+      // Match the dashboard's own row behaviour: modifier-clicks open a new
+      // tab instead of navigating this one.
+      if (event.metaKey || event.ctrlKey || event.button === 1) {
+        window.open(href, "_blank", "noreferrer");
+        return;
+      }
+      navigate(href);
+    },
+    [navigate],
+  );
+
   const instance = useDataTable({
     columns,
-    data: result.products,
-    getRowId: (product) => product.id,
+    data: result.variants,
+    getRowId: (variant) => variant.id,
     isLoading,
+    onRowClick,
     pagination: { onPaginationChange: setPagination, state: pagination },
     rowCount: result.count,
     search: {
@@ -204,11 +229,12 @@ const ProductsPage = () => {
           <div className="flex flex-col gap-y-1">
             <Heading level="h2">Catalog</Heading>
             <Text className="text-ui-fg-subtle" size="small">
-              Extensible products list, separate from the stock Products page. Columns contributed
-              by installed plugins render alongside the base columns.
+              One row per variant, separate from the stock Products page. Columns contributed by
+              installed plugins render alongside the base columns. Click a row to open that
+              variant.
             </Text>
           </div>
-          <DataTable.Search placeholder="Search products" />
+          <DataTable.Search placeholder="Search variants" />
         </DataTable.Toolbar>
         <DataTable.Table />
         <DataTable.Pagination />
@@ -226,4 +252,4 @@ export const config = defineRouteConfig({
   label: "Catalog",
 });
 
-export default ProductsPage;
+export default CatalogPage;

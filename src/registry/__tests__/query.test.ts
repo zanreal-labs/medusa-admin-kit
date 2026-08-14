@@ -1,65 +1,72 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildProductListQuery,
-  mapProductListResponse,
+  buildVariantListQuery,
+  mapVariantListResponse,
   pageCount,
-  PRODUCT_LIST_FIELDS,
+  VARIANT_LIST_FIELDS,
 } from "../query";
 
-describe("buildProductListQuery", () => {
+describe("buildVariantListQuery", () => {
   it("computes limit and offset from page state", () => {
-    expect(buildProductListQuery({ pageIndex: 0, pageSize: 20 })).toEqual({
-      fields: PRODUCT_LIST_FIELDS,
+    expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20 })).toEqual({
+      fields: VARIANT_LIST_FIELDS,
       limit: 20,
       offset: 0,
     });
-    expect(buildProductListQuery({ pageIndex: 2, pageSize: 20 })).toEqual({
-      fields: PRODUCT_LIST_FIELDS,
+    expect(buildVariantListQuery({ pageIndex: 2, pageSize: 20 })).toEqual({
+      fields: VARIANT_LIST_FIELDS,
       limit: 20,
       offset: 40,
     });
-    expect(buildProductListQuery({ pageIndex: 3, pageSize: 50 })).toMatchObject({
+    expect(buildVariantListQuery({ pageIndex: 3, pageSize: 50 })).toMatchObject({
       limit: 50,
       offset: 150,
     });
   });
 
-  it("requests variant sku fields so columns can key on SKU", () => {
-    expect(PRODUCT_LIST_FIELDS).toContain("variants.sku");
+  it("requests the variant's own fields plus its parent product", () => {
+    // The row is a variant, so `sku` is the row's SKU, and the parent product
+    // comes along on the same request: the product cell, the status cell and
+    // the row link all read it without a second round trip.
+    expect(VARIANT_LIST_FIELDS).toContain("sku");
+    expect(VARIANT_LIST_FIELDS).toContain("product.id");
+    expect(VARIANT_LIST_FIELDS).toContain("product.title");
+    expect(VARIANT_LIST_FIELDS).toContain("product.status");
+    expect(VARIANT_LIST_FIELDS).not.toContain("variants.");
   });
 
   it("includes a trimmed search as q, and omits blank searches", () => {
-    expect(buildProductListQuery({ pageIndex: 0, pageSize: 20, search: "  boot  " }).q).toBe(
+    expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20, search: "  boot  " }).q).toBe(
       "boot",
     );
-    expect(buildProductListQuery({ pageIndex: 0, pageSize: 20, search: "" }).q).toBeUndefined();
-    expect(buildProductListQuery({ pageIndex: 0, pageSize: 20, search: "   " }).q).toBeUndefined();
-    expect(buildProductListQuery({ pageIndex: 0, pageSize: 20 }).q).toBeUndefined();
+    expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20, search: "" }).q).toBeUndefined();
+    expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20, search: "   " }).q).toBeUndefined();
+    expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20 }).q).toBeUndefined();
   });
 
   it("guards against negative or fractional page state", () => {
-    expect(buildProductListQuery({ pageIndex: -3, pageSize: 20 }).offset).toBe(0);
-    expect(buildProductListQuery({ pageIndex: 1.9, pageSize: 20.5 })).toMatchObject({
+    expect(buildVariantListQuery({ pageIndex: -3, pageSize: 20 }).offset).toBe(0);
+    expect(buildVariantListQuery({ pageIndex: 1.9, pageSize: 20.5 })).toMatchObject({
       limit: 20,
       offset: 20,
     });
   });
 });
 
-describe("mapProductListResponse", () => {
-  it("returns products and count", () => {
-    expect(mapProductListResponse({ count: 42, products: [{ id: "a" }, { id: "b" }] })).toEqual({
+describe("mapVariantListResponse", () => {
+  it("returns variants and count", () => {
+    expect(mapVariantListResponse({ count: 42, variants: [{ id: "a" }, { id: "b" }] })).toEqual({
       count: 42,
-      products: [{ id: "a" }, { id: "b" }],
+      variants: [{ id: "a" }, { id: "b" }],
     });
   });
 
   it("tolerates a missing list or count", () => {
-    expect(mapProductListResponse(null)).toEqual({ count: 0, products: [] });
-    expect(mapProductListResponse({})).toEqual({ count: 0, products: [] });
-    expect(mapProductListResponse({ products: [{ id: "a" }] })).toEqual({
+    expect(mapVariantListResponse(null)).toEqual({ count: 0, variants: [] });
+    expect(mapVariantListResponse({})).toEqual({ count: 0, variants: [] });
+    expect(mapVariantListResponse({ variants: [{ id: "a" }] })).toEqual({
       count: 1,
-      products: [{ id: "a" }],
+      variants: [{ id: "a" }],
     });
   });
 });

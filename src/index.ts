@@ -2,61 +2,77 @@
  * `@zanreal/medusa-admin-kit` public API.
  *
  * Contributor plugins import from here to add columns to the shared, extensible
- * products table:
+ * Catalog table. The table lists one **variant** per row, so a column answers
+ * for a single variant:
  *
  * ```ts
- * import { registerProductColumn } from "@zanreal/medusa-admin-kit"
+ * import { registerVariantColumn } from "@zanreal/medusa-admin-kit"
  *
- * registerProductColumn({
- *   id: "allegro.sync_status",
+ * registerVariantColumn({
+ *   id: "allegro.offer_status",
  *   header: "Allegro",
  *   priority: 10,
- *   cell: (ctx) => ctx.firstSku ?? "-",
+ *   cell: (ctx) => ctx.sku ?? "-",
  * })
  * ```
  *
  * See the README for the exact contributor contract (where to put that call so
- * it runs at admin boot).
+ * it runs at admin boot) and for migrating a column written against the older
+ * product-row API.
  */
 
 export {
   clearProductColumns,
+  clearVariantColumns,
   getProductColumn,
   getRegisteredProductColumns,
+  getRegisteredVariantColumns,
+  getVariantColumn,
   hasProductColumn,
+  hasVariantColumn,
   registerProductColumn,
+  registerVariantColumn,
   unregisterProductColumn,
-} from "./registry/product-columns";
+  unregisterVariantColumn,
+} from "./registry/variant-columns";
 
-export { buildProductColumnContext, extractSkus, normalizeVariant } from "./registry/context";
+export { buildVariantColumnContext, extractSkus, normalizeVariant } from "./registry/context";
 
 export {
-  BASE_PRODUCT_COLUMN_IDS,
+  BASE_CATALOG_COLUMN_IDS,
   renderRegisteredCell,
-  resolveProductColumns,
+  resolveCatalogColumns,
 } from "./registry/columns";
 
-export type { BaseProductColumnId, ResolvedProductColumn } from "./registry/columns";
+export type { BaseCatalogColumnId, ResolvedCatalogColumn } from "./registry/columns";
+
+export { unwrapClickedRow, variantDetailHref } from "./registry/row-link";
 
 export {
-  buildProductListQuery,
+  buildVariantListQuery,
   DEFAULT_PAGE_SIZE,
-  mapProductListResponse,
+  mapVariantListResponse,
   PAGE_SIZE_OPTIONS,
   pageCount,
-  PRODUCT_LIST_FIELDS,
+  VARIANT_LIST_FIELDS,
 } from "./registry/query";
 
 export type {
-  ProductListQuery,
-  ProductListQueryInput,
-  ProductListResponse,
+  VariantListQuery,
+  VariantListQueryInput,
+  VariantListResponse,
 } from "./registry/query";
 
 export type {
+  CatalogProduct,
+  CatalogVariant,
+  CatalogVariantRow,
   ProductColumnAsyncState,
   ProductColumnCellContext,
   ProductColumnDef,
   ProductColumnProduct,
   ProductColumnVariant,
+  VariantColumnAsyncState,
+  VariantColumnCellContext,
+  VariantColumnDef,
 } from "./registry/types";
