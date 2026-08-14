@@ -1,73 +1,96 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildProductColumnContext } from "../context";
-import { EXAMPLE_VARIANT_SUMMARY_COLUMN } from "../example/variant-summary-column";
+import { BASE_CATALOG_COLUMN_IDS, renderRegisteredCell, resolveCatalogColumns } from "../columns";
+import type { CatalogVariantRow, VariantColumnDef } from "../types";
 import {
-  clearProductColumns,
-  getRegisteredProductColumns,
+  clearVariantColumns,
+  getRegisteredVariantColumns,
   registerProductColumn,
-} from "../product-columns";
-import type { ProductColumnProduct } from "../types";
+  registerVariantColumn,
+} from "../variant-columns";
 
 /**
  * Exercises the full contributor pipeline the same way the admin runtime does:
- * register through the public API (as the demo widget does at boot), pull the
- * ordered columns (as the route does when it renders), then run a cell against a
- * built context (as the DataTable does per row). This is the kit's integration
- * surface without needing a live dashboard.
+ * register through the public API (as a contributor widget does at boot), pull
+ * the ordered columns and merge them with the base ones (as the route does when
+ * it renders), then run a cell against a built context (as the DataTable does
+ * per row). This is the kit's integration surface without needing a live
+ * dashboard.
  */
-describe("registry integration (demo column pipeline)", () => {
+describe("registry integration (contributor pipeline)", () => {
+  const row: CatalogVariantRow = {
+    id: "variant_1",
+    product: { id: "prod_1", status: "published", title: "Boots" },
+    sku: "BOOT-40",
+    title: "40",
+  };
+
   beforeEach(() => {
-    clearProductColumns();
+    clearVariantColumns();
   });
 
-  it("registers the example column through the public API and renders its cell", () => {
-    // Exactly what src/admin/widgets/example-product-columns.tsx does at boot.
-    registerProductColumn(EXAMPLE_VARIANT_SUMMARY_COLUMN);
-
-    const columns = getRegisteredProductColumns();
-    expect(columns.map((c) => c.id)).toContain("medusa-admin-kit.example.variant_summary");
-
-    const product: ProductColumnProduct = {
-      id: "prod_1",
-      title: "Boots",
-      variants: [
-        { id: "v1", sku: "BOOT-1", title: "40" },
-        { id: "v2", sku: "BOOT-2", title: "41" },
-      ],
-    };
-    const ctx = buildProductColumnContext(product);
-    const rendered = EXAMPLE_VARIANT_SUMMARY_COLUMN.cell(ctx);
-    expect(rendered).toBe("2 variants - BOOT-1");
-  });
-
-  it("renders the singular, no-sku case", () => {
-    const ctx = buildProductColumnContext({
-      id: "prod_2",
-      variants: [{ id: "v1", title: "only" }],
-    });
-    expect(EXAMPLE_VARIANT_SUMMARY_COLUMN.cell(ctx)).toBe("1 variant");
-  });
-
-  it("orders contributed columns after each other by priority", () => {
-    // Two 'plugins' registering columns plus the kit's example column.
-    registerProductColumn({
-      cell: (ctx) => ctx.firstSku ?? "-",
+  it("registers a variant column and renders its cell against a row", () => {
+    registerVariantColumn({
+      cell: (ctx) => `${ctx.product?.title} / ${ctx.variant.title} / ${ctx.sku}`,
       header: "Allegro",
-      id: "allegro.sync_status",
+      id: "allegro.offer_status",
       priority: 10,
     });
-    registerProductColumn({
-      cell: () => "42%",
-      header: "Margin",
-      id: "product-costs.margin",
+
+    const columns = getRegisteredVariantColumns();
+    expect(columns.map((c) => c.id)).toEqual(["allegro.offer_status"]);
+    expect(renderRegisteredCell(columns[0], row)).toBe("Boots / 40 / BOOT-40");
+  });
+
+  it("renders the whole table's column order: base columns, then contributors by priority", () => {
+    registerVariantColumn({
+      cell: (ctx) => ctx.sku ?? "-",
+      header: "Allegro",
+      id: "allegro.offer_status",
+      priority: 10,
+    });
+    registerVariantColumn({
+      cell: () => "12.50 PLN",
+      header: "Cost",
+      id: "product-costs.cost",
       priority: 20,
     });
-    registerProductColumn(EXAMPLE_VARIANT_SUMMARY_COLUMN); // priority 1000
 
-    expect(getRegisteredProductColumns().map((c) => c.id)).toEqual([
-      "allegro.sync_status",
-      "product-costs.margin",
-      "medusa-admin-kit.example.variant_summary",
+    const resolved = resolveCatalogColumns(getRegisteredVariantColumns());
+    expect(resolved.map((c) => c.id)).toEqual([
+      ...BASE_CATALOG_COLUMN_IDS,
+      "allegro.offer_status",
+      "product-costs.cost",
     ]);
+    // No two columns in the rendered table share an id, and none of the
+    // contributed ones repeats a base column.
+    expect(new Set(resolved.map((c) => c.id)).size).toBe(resolved.length);
+  });
+
+  it("still renders a column registered through the deprecated product-shaped API", () => {
+    // The whole point of keeping the alias: a plugin nobody has migrated yet
+    // keeps its column, and the old ctx fields resolve to this one variant.
+    const legacy: VariantColumnDef = {
+      cell: (ctx) => `${ctx.skus.length} sku, ${ctx.variantCount} variant`,
+      header: "Legacy",
+      id: "legacy.column",
+    };
+    registerProductColumn(legacy);
+
+    expect(getRegisteredVariantColumns().map((c) => c.id)).toEqual(["legacy.column"]);
+    expect(renderRegisteredCell(legacy, row)).toBe("1 sku, 1 variant");
+  });
+
+  it("isolates a throwing cell to that cell (the route catches it)", () => {
+    // `renderRegisteredCell` is the raw call; the route wraps it in
+    // `RegisteredVariantCell`, which is where the catch lives. Assert the raw
+    // behaviour so the wrapper's job stays explicit.
+    const boom: VariantColumnDef = {
+      cell: () => {
+        throw new Error("contributor bug");
+      },
+      header: "Boom",
+      id: "boom",
+    };
+    expect(() => renderRegisteredCell(boom, row)).toThrow("contributor bug");
   });
 });

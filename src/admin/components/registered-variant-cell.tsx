@@ -1,12 +1,17 @@
 import { Text } from "@medusajs/ui";
 import { useEffect, useMemo, useState } from "react";
-import { buildProductColumnContext } from "../../registry/context";
-import type { ProductColumnAsyncState, ProductColumnDef, ProductColumnProduct } from "../../registry/types";
+import { buildVariantColumnContext } from "../../registry/context";
+import type {
+  CatalogProduct,
+  CatalogVariantRow,
+  VariantColumnAsyncState,
+  VariantColumnDef,
+} from "../../registry/types";
 
 const SYNC_ASYNC_STATE: undefined = undefined;
 
 /**
- * Renders one registered column's cell for one product row.
+ * Renders one registered column's cell for one variant row.
  *
  * This owns the two things a bare `def.cell(ctx)` call cannot, so a
  * contributor never has to hand-roll them:
@@ -23,15 +28,15 @@ const SYNC_ASYNC_STATE: undefined = undefined;
  *   not installed simply never registers a column at all, so this component
  *   never runs for it - there is nothing to degrade.
  */
-export function RegisteredProductCell<TProduct extends ProductColumnProduct, TData = unknown>({
+export function RegisteredVariantCell<TProduct extends CatalogProduct, TData = unknown>({
   def,
-  product,
+  row,
 }: {
-  def: ProductColumnDef<TProduct, TData>;
-  product: TProduct;
+  def: VariantColumnDef<TProduct, TData>;
+  row: CatalogVariantRow<TProduct>;
 }) {
-  const ctx = useMemo(() => buildProductColumnContext(product), [product]);
-  const [asyncState, setAsyncState] = useState<ProductColumnAsyncState<TData>>(() => ({
+  const ctx = useMemo(() => buildVariantColumnContext(row), [row]);
+  const [asyncState, setAsyncState] = useState<VariantColumnAsyncState<TData>>(() => ({
     data: undefined,
     error: null,
     isLoading: Boolean(def.loadData),
@@ -62,7 +67,7 @@ export function RegisteredProductCell<TProduct extends ProductColumnProduct, TDa
       cancelled = true;
     };
     // `def` is registered once at boot and its identity is stable; `ctx` is
-    // rebuilt whenever the row's product changes (a new page/search fetch).
+    // rebuilt whenever the row changes (a new page/search fetch).
   }, [def, ctx]);
 
   try {

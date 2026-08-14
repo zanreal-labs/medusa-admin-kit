@@ -1,41 +1,83 @@
 # @zanreal/medusa-admin-kit
 
-An **extensible products list** for the Medusa v2 admin. The kit ships one admin
-route - a products table - and a cross-plugin **column registry**. Sibling
-plugins (Allegro, product-costs, ...) register their own columns into that one
-table instead of each shipping a separate products page.
+An **extensible catalogue list** for the Medusa v2 admin. The kit ships one admin
+route - a table with **one row per product variant** - and a cross-plugin
+**column registry**. Sibling plugins (Allegro, product-costs, ...) register their
+own columns into that one table instead of each shipping a separate products
+page.
 
 It is two things in one package:
 
-1. **An importable library.** `registerProductColumn(def)`,
-   `getRegisteredProductColumns()` and the supporting types. Contributor plugins
+1. **An importable library.** `registerVariantColumn(def)`,
+   `getRegisteredVariantColumns()` and the supporting types. Contributor plugins
    depend on this to add a column.
-2. **A Medusa plugin.** It ships the admin `Products` route that renders the
+2. **A Medusa plugin.** It ships the admin `Catalog` route that renders the
    base columns plus every registered column.
 
 ---
 
-## Why a parallel products list
+## Why a parallel list
 
 Medusa 2.18's admin SDK lets a plugin inject **widgets** into fixed zones
 (`product.list.before`, `product.details.after`, ...) but it gives a plugin **no
 way to add a column to the core products data table** - that table is not
-extensible. So today every plugin that wants per-product state while browsing
-the catalogue has to build its own full products page, and a store that installs
-three such plugins ends up with three near-identical products lists.
+extensible. So today every plugin that wants per-row state while browsing the
+catalogue has to build its own full products page, and a store that installs
+three such plugins ends up with three near-identical lists.
 
-This kit owns **one** products list that _is_ extensible. Each plugin contributes
-a column definition; the kit renders them all in a single table, ordered by
-priority. The stock admin products page keeps doing product CRUD; this route is
-the shared read surface plugins can decorate.
+This kit owns **one** list that _is_ extensible. Each plugin contributes a column
+definition; the kit renders them all in a single table, ordered by priority. The
+stock admin products page keeps doing product CRUD; this route is the shared read
+surface plugins can decorate.
 
 The route lives at `/app/catalog` and adds a **Catalog** item to the sidebar,
 deliberately separate from the stock admin's own `/app/products` page - it does
-not replace or shadow it. A store gets both: the stock Products page for core
-product CRUD, and Catalog as the shared, extensible read surface plugins
-decorate. The route path is just the folder name under `src/admin/routes/`, so
-a fork can rename it (and the sidebar `label` in `page.tsx`) to mount somewhere
-else without touching anything under `src/registry/`.
+not replace or shadow it. The route path is just the folder name under
+`src/admin/routes/`, so a fork can rename it (and the sidebar `label` in
+`page.tsx`) to mount somewhere else without touching anything under
+`src/registry/`.
+
+---
+
+## Why rows are variants
+
+A row is a **variant**, not a product. This is the difference that makes the
+table worth reading.
+
+Stock, price, cost, an Allegro offer, a barcode: every one of those is a
+property of a variant. When the row was a product, a column that owned
+variant-level data had nowhere to put it except a roll-up, and roll-ups say
+nothing useful. "12/13 costed" does not tell you what anything costs; "3 offers
+/ 1 conflict" does not tell you which SKU is broken. One variant per row deletes
+the whole category of problem: each cell has exactly one value to show.
+
+Mechanically the table queries `GET /admin/product-variants` (with the parent
+product pulled in on the same request via `fields`), so one API row is one table
+row, `count` is a variant count and pagination is exact. Fetching a page of
+products and flattening it client-side would give neither.
+
+### Base columns
+
+| Column      | What it shows for a variant row                                   |
+| ----------- | ----------------------------------------------------------------- |
+| (thumbnail) | The variant's image, falling back to the product's, and Medusa's own `Photo` placeholder when there is neither. |
+| Product     | The parent product's title.                                       |
+| Variant     | The variant's own title (its option combination).                 |
+| SKU         | That one variant's SKU, or a muted "no sku".                      |
+| Status      | The parent product's status badge.                                |
+
+There is no `handle` column: a URL slug is not something anyone scans a
+catalogue by, and it belongs to the parent product, not the row.
+
+### Clicking a row
+
+A row opens **that variant**, at `/products/:product_id/variants/:variant_id`.
+That route is the stock admin's own variant detail page - the dashboard's
+product detail screen links its variant table to exactly the same path - so the
+Catalog hands the user to the same screen the rest of the admin would, and the
+breadcrumb there walks back up to the product. Linking to the product instead
+would throw away the one thing the row identified. Cmd/Ctrl/middle-click opens
+it in a new tab, matching the dashboard's own rows.
 
 ---
 
@@ -77,25 +119,24 @@ the one eval-order rule and it silently will not.
 
 ### 2. Register from the top level of an admin extension module
 
-Create a widget in **your** plugin and call `registerProductColumn` at **module
+Create a widget in **your** plugin and call `registerVariantColumn` at **module
 top level** - not inside the component, not in an effect, not in a lazily
 imported helper:
 
 ```tsx
 // your-plugin/src/admin/widgets/register-columns.tsx
 import { defineWidgetConfig } from "@medusajs/admin-sdk";
-import { registerProductColumn } from "@zanreal/medusa-admin-kit";
+import { registerVariantColumn } from "@zanreal/medusa-admin-kit";
 import { Badge } from "@medusajs/ui";
 
 // Runs once at admin boot. This is the contract.
-registerProductColumn({
-  id: "allegro.sync_status", // namespace it to your plugin
+registerVariantColumn({
+  id: "allegro.offer_status", // namespace it to your plugin
   header: "Allegro",
   priority: 10, // lower renders first; default 0
   cell: (ctx) => {
-    // ctx is typed: product row + normalized variants/skus.
-    const listed = ctx.skus.length > 0;
-    return <Badge color={listed ? "green" : "grey"}>{listed ? "listed" : "-"}</Badge>;
+    // ctx is typed: one variant, its SKU, and its parent product.
+    return <Badge color={ctx.sku ? "green" : "grey"}>{ctx.sku ?? "-"}</Badge>;
   },
 });
 
@@ -108,15 +149,20 @@ export default RegisterColumns;
 
 That is the whole contract:
 
-- **Import** `registerProductColumn` from `@zanreal/medusa-admin-kit`.
+- **Import** `registerVariantColumn` from `@zanreal/medusa-admin-kit`.
 - **Call** it at the **top level** of a file under `src/admin/widgets/` (or
   `src/admin/routes/`).
 - Give the widget a **default export** and a **`zone`** so the admin build picks
   it up. The component may return `null`; it never has to render.
 
+The kit deliberately ships **no demo column of its own**. It used to, and that
+was a bug: the demo rendered the same "2 variants - SKU-1" string as a base
+column, so a real store saw two columns saying the same thing. Example code
+belongs in this README, not in the plugin bundle every store installs.
+
 ### The one eval-order rule
 
-**The `registerProductColumn` call must live at the top level of an admin
+**The `registerVariantColumn` call must live at the top level of an admin
 extension file (a widget or a route `page`).** Do not move it into a React
 component body, a `useEffect`, an event handler, or a helper module that only
 your route imports lazily.
@@ -129,7 +175,7 @@ Why this rule is exactly right, and not superstition:
   A static import _evaluates_ the module. So a widget module's top-level code
   runs **once, at admin boot**, whether or not its zone is ever displayed and
   whether or not anyone navigates to your route.
-- The kit's `Products` route reads the registry only **when it renders**, which
+- The kit's `Catalog` route reads the registry only **when it renders**, which
   requires navigating to it - strictly after boot. So every contributor that
   registered at boot is already present when the table is drawn. There is no
   race.
@@ -162,6 +208,12 @@ Symbol.for("@zanreal/medusa-admin-kit/product-column-registry/v1")
 This is why the contract does not ask you to get dependency externalization
 perfect - the `globalThis` anchor makes double-instantiation harmless.
 
+The key stays at **v1** even though the cell context changed shape when rows
+became variants. Bumping it would create the very split it exists to prevent:
+the route reading a v2 store while a plugin nobody has migrated yet wrote its
+column into v1, and that column silently vanishing. See "Migrating from product
+rows" below for what keeps an unmigrated column rendering instead.
+
 ---
 
 ## What the package ships (dual entry, and why)
@@ -179,7 +231,7 @@ The ESM entry is not cosmetic; without it a contributor's column cannot ship.
 `medusa plugin:build` compiles this package with `tsc` to CommonJS, and it
 externalizes declared dependencies - so a contributor's built
 `.medusa/server/src/admin/index.mjs` keeps a bare
-`import { registerProductColumn } from "@zanreal/medusa-admin-kit"`. The host
+`import { registerVariantColumn } from "@zanreal/medusa-admin-kit"`. The host
 app's admin build (`medusa build` -> vite) declares no `rollupOptions.external`,
 so it has to pull that import into the bundle. Vite's default
 `build.commonjsOptions.include` is `[/node_modules/]`, which means a CommonJS
@@ -187,7 +239,7 @@ entry only survives when the package happens to sit under `node_modules`. As a
 workspace package or a git submodule, rollup resolves through the symlink to a
 real path outside `node_modules`, skips CommonJS interop, parses the CommonJS
 entry as ESM, finds no named exports, and kills the whole admin build with
-`"registerProductColumn" is not exported by ".../src/index.js"`. Shipping real
+`"registerVariantColumn" is not exported by ".../src/index.js"`. Shipping real
 ESM makes the import statically analyzable wherever the package lives.
 
 `index.mjs` is a single self-contained bundle, so it is a second copy of the
@@ -195,9 +247,10 @@ registry code next to the CommonJS one (and next to the copy `plugin:build`
 inlines into this package's own admin bundle). That is safe for exactly the
 reason above: the store is on `globalThis`, never in module scope. Keep it that
 way. `src/__tests__/built-entry.test.ts` asserts both halves against the real
-build output - that the ESM entry exposes every public binding as a static
-`export { ... }` a bundler with no CommonJS interop can read, and that
-registering through one entry is visible through the other.
+build output - that the ESM entry exposes every public binding (including the
+deprecated aliases, which an unmigrated plugin's bundle still imports by name)
+as a static `export { ... }` a bundler with no CommonJS interop can read, and
+that registering through one entry is visible through the other.
 
 If a host's admin build instead fails with **`Rollup failed to resolve import
 "@zanreal/medusa-admin-kit"`**, that is a different problem: the kit is not
@@ -210,49 +263,47 @@ from the plugin's real path on disk.
 ## Column API
 
 ```ts
-interface ProductColumnDef<TProduct = ProductColumnProduct, TData = unknown> {
+interface VariantColumnDef<TProduct = CatalogProduct, TData = unknown> {
   /** Stable, unique, namespaced id. Re-registering the same id replaces it. */
   id: string;
   /** A string, or a render function for a custom header. */
   header: string | (() => ReactNode);
   /** Sort key among registered columns. Lower first; ties keep registration order. Default 0. */
   priority?: number;
-  /** Renders the cell for one product row. `async` is set only when `loadData` is. */
-  cell: (ctx: ProductColumnCellContext<TProduct>, async?: ProductColumnAsyncState<TData>) => ReactNode;
+  /** Renders the cell for one variant row. `async` is set only when `loadData` is. */
+  cell: (ctx: VariantColumnCellContext<TProduct>, async?: VariantColumnAsyncState<TData>) => ReactNode;
   /** Optional async loader for a cell backed by a network call. See "Async cells" below. */
-  loadData?: (ctx: ProductColumnCellContext<TProduct>) => Promise<TData>;
+  loadData?: (ctx: VariantColumnCellContext<TProduct>) => Promise<TData>;
 }
 ```
 
-Every cell receives a typed context, built once per row so you never re-derive
-SKUs:
+Every cell receives a typed context, built once per row:
 
 ```ts
-interface ProductColumnCellContext<TProduct> {
-  product: TProduct; // the row from GET /admin/products
-  variants: { id: string; sku: string | null; title: string | null }[];
-  skus: string[]; // non-empty, de-duplicated, in order
-  firstSku: string | null;
-  variantCount: number;
+interface VariantColumnCellContext<TProduct> {
+  variant: { id: string; sku: string | null; title: string | null; thumbnail: string | null };
+  variantId: string;
+  sku: string | null;
+  product: TProduct | null; // null only if the row was fetched without it
+  productId: string | null;
 }
 ```
 
-The products API is queried with variant `id`, `title` and `sku` in `fields`, so
-columns can key on SKU without a second round-trip.
+`product` is nullable because a row can in principle be fetched without it; the
+Catalog route always requests it, so in practice it is there.
 
 ### Async cells
 
-Most columns key on data already in `ctx` (SKUs, variant count) and never need
-`loadData`. A column backed by a network call - an Allegro offer-status lookup,
-a product-costs margin lookup - sets `loadData` instead of doing the fetch
-inline in `cell`:
+Most columns key on data already in `ctx` and never need `loadData`. A column
+backed by a network call - an Allegro offer lookup, a product-costs cost lookup -
+sets `loadData` instead of doing the fetch inline in `cell`:
 
 ```tsx
-registerProductColumn({
+registerVariantColumn({
   id: "allegro.offer_status",
   header: "Allegro",
   priority: 10,
-  loadData: async (ctx) => fetchOfferStatus(ctx.skus), // aggregate variant -> product here
+  loadData: async (ctx) => (ctx.sku ? fetchOffer(ctx.sku) : null), // one variant, one lookup
   cell: (_ctx, async) => {
     if (!async || async.isLoading) {
       return <Text size="small">...</Text>; // skeleton; also the no-JS-yet render
@@ -264,7 +315,7 @@ registerProductColumn({
         </Text>
       );
     }
-    return <Badge>{async.data}</Badge>; // e.g. "3 offers / 1 conflict"
+    return <Badge>{async.data?.status ?? "-"}</Badge>;
   },
 });
 ```
@@ -278,11 +329,11 @@ throws - synchronously, or because it does not handle `async.error` and derefs
 `async.data` while `undefined` - the kit catches it and renders an inline error
 for that one cell only; it does not take down the row, the table, or any other
 plugin's column. A plugin that is not installed never calls
-`registerProductColumn` at all, so its column, and any risk from it, simply
+`registerVariantColumn` at all, so its column, and any risk from it, simply
 does not exist - there is nothing to degrade.
 
 ```ts
-interface ProductColumnAsyncState<TData> {
+interface VariantColumnAsyncState<TData> {
   data: TData | undefined; // set once loadData resolves
   isLoading: boolean;
   error: unknown; // set if loadData rejected
@@ -293,34 +344,59 @@ interface ProductColumnAsyncState<TData> {
 
 | Function                        | Purpose                                           |
 | ------------------------------- | ------------------------------------------------- |
-| `registerProductColumn(def)`    | Add (or replace, by `id`) a column.               |
-| `getRegisteredProductColumns()` | All registered columns, sorted by `priority`.     |
-| `hasProductColumn(id)`          | Whether an id is registered.                      |
-| `getProductColumn(id)`          | One column by id, or `undefined`.                 |
-| `unregisterProductColumn(id)`   | Remove a column; returns whether one was removed. |
-| `clearProductColumns()`         | Remove all (test/HMR resets).                     |
+| `registerVariantColumn(def)`    | Add (or replace, by `id`) a column.               |
+| `getRegisteredVariantColumns()` | All registered columns, sorted by `priority`.     |
+| `hasVariantColumn(id)`          | Whether an id is registered.                      |
+| `getVariantColumn(id)`          | One column by id, or `undefined`.                 |
+| `unregisterVariantColumn(id)`   | Remove a column; returns whether one was removed. |
+| `clearVariantColumns()`         | Remove all (test/HMR resets).                     |
 
-Pure helpers are exported too: `buildProductColumnContext`, `extractSkus`,
-`normalizeVariant`, `resolveProductColumns`, `renderRegisteredCell`, and the
-query mappers `buildProductListQuery` / `mapProductListResponse`.
+Pure helpers are exported too: `buildVariantColumnContext`, `extractSkus`,
+`normalizeVariant`, `resolveCatalogColumns`, `renderRegisteredCell`,
+`variantDetailHref`, `unwrapClickedRow`, and the query mappers
+`buildVariantListQuery` / `mapVariantListResponse`.
 
 ---
 
-## How the ZanReal plugins register
+## Migrating from product rows
 
-- **Allegro** (`@zanreal/medusa-allegro`) registers an `allegro.offer_status`
-  column - a per-row badge aggregating each SKU's Allegro offer state to the
-  product level (e.g. "3 offers / 1 conflict") - via `loadData`, from a widget
-  in its own `src/admin/widgets/`.
-- **product-costs** (`@zanreal/medusa-product-costs`) registers a
-  `product-costs.margin` column showing the cost/margin it owns, also via
-  `loadData`.
+The registry has **one** context shape, and it is variant-shaped. It does not
+accept a product-shaped column alongside it: a product-shaped cell in a
+variant-row table can only render the same aggregate on every one of that
+product's rows, which is the "12/13 costed" defect repeated thirteen times
+rather than fixed once.
 
-Both are async columns: the lookup is a network call keyed by SKU, so neither
-blocks the base table's render.
+What that costs a contributor:
 
-Each ships one small registration widget; neither builds a competing products
-list.
+| Old                            | New                             | Note                                                                 |
+| ------------------------------ | ------------------------------- | -------------------------------------------------------------------- |
+| `registerProductColumn`        | `registerVariantColumn`         | Deprecated alias kept; identical function, same store.               |
+| `getRegisteredProductColumns`  | `getRegisteredVariantColumns`   | Deprecated alias kept.                                               |
+| `hasProductColumn` etc.        | `hasVariantColumn` etc.         | Deprecated aliases kept.                                             |
+| `ProductColumnDef`             | `VariantColumnDef`              | Deprecated type alias kept.                                          |
+| `ProductColumnCellContext`     | `VariantColumnCellContext`      | Deprecated type alias kept, but **reshaped** - see below.            |
+| `ctx.skus`                     | `[ctx.sku]`                     | Still present, now this row's single SKU.                            |
+| `ctx.firstSku`                 | `ctx.sku`                       | Still present, same value.                                           |
+| `ctx.variantCount`             | always `1`                      | Still present. Any ratio built from it is `n/1`; drop the ratio.     |
+| `ctx.variants`                 | `[ctx.variant]`                 | Still present, this row's single variant.                            |
+| `ctx.product`                  | `ctx.product` (nullable)        | Now `TProduct \| null`, and it no longer carries a `variants` array. |
+| `buildProductColumnContext`    | `buildVariantColumnContext`     | **Removed**, not aliased - it took a product and cannot be made coherent. |
+| `resolveProductColumns`        | `resolveCatalogColumns`         | **Renamed**, no alias. Route plumbing, not contributor API.          |
+| `BASE_PRODUCT_COLUMN_IDS`      | `BASE_CATALOG_COLUMN_IDS`       | **Renamed**, no alias. Contents changed too.                         |
+| `PRODUCT_LIST_FIELDS` / `buildProductListQuery` / `mapProductListResponse` | `VARIANT_LIST_FIELDS` / `buildVariantListQuery` / `mapVariantListResponse` | **Renamed**, no alias. The table queries variants now. |
+
+So a plugin that does nothing at all keeps its column: the registration alias
+still works, and the old `ctx` fields still resolve - scoped to the row's one
+variant, which is the correct behaviour. A `loadData` that queried
+`ctx.skus` now looks up exactly this row's SKU.
+
+What it should still do is delete its aggregation, because there is nothing left
+to aggregate. Both first-party contributors did:
+
+- **Allegro** (`@zanreal/medusa-allegro`) registers `allegro.offer_status`,
+  now the state of the one offer mapped to this variant's SKU.
+- **product-costs** (`@zanreal/medusa-product-costs`) registers
+  `product-costs.cost`, now that variant's actual unit cost.
 
 ---
 
@@ -330,7 +406,7 @@ list.
 pnpm install
 pnpm build           # plugin:build (server + admin bundle) then the ESM entry
 pnpm test            # vitest: registry, context builder, query + column mapping,
-                     # and the built entry surface (needs pnpm build first)
+                     # row links, and the built entry surface (needs pnpm build first)
 pnpm typecheck       # tsc, server project
 pnpm typecheck:admin # tsc, admin (browser) project
 ```
@@ -339,6 +415,10 @@ pnpm typecheck:admin # tsc, admin (browser) project
 which emits `.medusa/server/src/index.mjs`. Run it before `pnpm test`, since the
 built-entry test reads that output; `prepare` builds on install and CI builds
 before it tests, so this only bites when you delete `.medusa/` by hand.
+
+`react-router-dom` is a devDependency, never a runtime one: the admin bundler
+externalizes it unconditionally and the host dashboard always provides it. It is
+declared only so `tsc` can see `useNavigate` for the row-click handler.
 
 The registry and its helpers are framework-free and unit-tested in Node; the
 route and widget are typechecked against the real `@medusajs/ui` types and built
