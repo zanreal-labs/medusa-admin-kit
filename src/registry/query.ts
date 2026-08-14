@@ -19,9 +19,22 @@ export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
  * of products client-side would give neither. The parent product is pulled in
  * on the same request (`product.*`) so the product cell, the status cell and
  * the row link never need a second round trip.
+ *
+ * The money columns are on the same request too, and this is the whole reason
+ * they are base columns rather than contributed ones:
+ *
+ * - `*prices` is the variant's price set, which backs the shop-price column.
+ *   The admin route already lists it among its default fields and remaps it
+ *   from `price_set.prices`, so asking for it costs one join, not one request
+ *   per row.
+ * - `metadata` and `product.metadata` back the SRP column, which reads
+ *   `metadata.srp` off the variant and falls back to the product's.
+ *
+ * A page of 100 variants therefore renders both prices with **zero** extra
+ * round trips.
  */
 export const VARIANT_LIST_FIELDS =
-  "id,title,sku,thumbnail,product.id,product.title,product.handle,product.status,product.thumbnail";
+  "id,title,sku,thumbnail,metadata,*prices,product.id,product.title,product.handle,product.status,product.thumbnail,product.metadata";
 
 /** UI state the table holds. */
 export interface VariantListQueryInput {

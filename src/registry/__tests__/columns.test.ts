@@ -28,6 +28,15 @@ describe("resolveCatalogColumns", () => {
     expect(ids).toContain("sku");
   });
 
+  it("ends the base columns with the money block, so contributed prices sit next to them", () => {
+    // Shop price and SRP are base columns because both arrive on the row the
+    // kit already fetches. They come last so a contributed price column (the
+    // Allegro one) lands immediately after them and the three prices read as
+    // one contiguous block rather than being scattered across the row.
+    const ids: readonly string[] = BASE_CATALOG_COLUMN_IDS;
+    expect(ids.slice(-2)).toEqual(["price", "srp"]);
+  });
+
   it("gives every base column a distinct id, so no base column can render twice", () => {
     const ids: readonly string[] = BASE_CATALOG_COLUMN_IDS;
     expect(new Set(ids).size).toBe(ids.length);

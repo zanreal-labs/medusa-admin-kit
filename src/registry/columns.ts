@@ -20,6 +20,13 @@ import type {
  * - there is no `handle` column. A URL slug is not something you scan a
  *   catalogue by, it is a property of the parent product, and it was pure
  *   width; the product cell carries the product's identity instead.
+ *
+ * `price` and `srp` are base columns rather than contributed ones because both
+ * are core Medusa data the kit already has in hand: the shop price is the
+ * variant's own price set and the SRP is its own `metadata.srp`. Routing either
+ * through the registry would mean a plugin re-fetching, per row, something that
+ * arrived with the row. They sit last so the money columns form one contiguous
+ * block with the price columns contributors add after them.
  */
 export const BASE_CATALOG_COLUMN_IDS = [
   "thumbnail",
@@ -27,6 +34,8 @@ export const BASE_CATALOG_COLUMN_IDS = [
   "variant",
   "sku",
   "status",
+  "price",
+  "srp",
 ] as const;
 
 export type BaseCatalogColumnId = (typeof BASE_CATALOG_COLUMN_IDS)[number];
