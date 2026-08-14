@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { CatalogPrice } from "./money";
 
 /**
  * A single product variant, reduced to the fields a column cell is likely to
@@ -25,6 +26,8 @@ export interface CatalogProduct {
   handle?: string | null;
   status?: string | null;
   thumbnail?: string | null;
+  /** Where a product-wide SRP lives, when the variant does not carry its own. */
+  metadata?: Record<string, unknown> | null;
 }
 
 /**
@@ -40,6 +43,14 @@ export interface CatalogVariantRow<TProduct extends CatalogProduct = CatalogProd
   title?: string | null;
   thumbnail?: string | null;
   product?: TProduct | null;
+  /** Custom data on the variant. The SRP is read from here. */
+  metadata?: Record<string, unknown> | null;
+  /**
+   * The variant's price set, as `GET /admin/product-variants` returns it. A
+   * variant that is not sold anywhere has none, which is a normal state, not a
+   * missing field.
+   */
+  prices?: readonly CatalogPrice[] | null;
 }
 
 /**

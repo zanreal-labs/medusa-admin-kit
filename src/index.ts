@@ -46,6 +46,21 @@ export {
 
 export type { BaseCatalogColumnId, ResolvedCatalogColumn } from "./registry/columns";
 
+export {
+  formatAmount,
+  readAmount,
+  readVariantSrp,
+  selectVariantPrice,
+  SRP_METADATA_KEY,
+} from "./registry/money";
+
+export type {
+  CatalogMoney,
+  CatalogPrice,
+  SrpSource,
+  VariantPriceSelection,
+} from "./registry/money";
+
 export { unwrapClickedRow, variantDetailHref } from "./registry/row-link";
 
 export {

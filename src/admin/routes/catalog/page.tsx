@@ -16,6 +16,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { resolveCatalogColumns } from "../../../registry/columns";
 import type { BaseCatalogColumnId } from "../../../registry/columns";
+import { readVariantSrp, selectVariantPrice } from "../../../registry/money";
 import {
   buildVariantListQuery,
   DEFAULT_PAGE_SIZE,
@@ -25,6 +26,7 @@ import { unwrapClickedRow, variantDetailHref } from "../../../registry/row-link"
 import type { VariantColumnDef } from "../../../registry/types";
 import { getRegisteredVariantColumns } from "../../../registry/variant-columns";
 import { CatalogThumbnail } from "../../components/catalog-thumbnail";
+import { MoneyCell } from "../../components/money-cell";
 import { RegisteredVariantCell } from "../../components/registered-variant-cell";
 import { sdk } from "../../lib/sdk";
 
@@ -115,6 +117,60 @@ function buildBaseColumn(id: BaseCatalogColumnId): DataTableColumnDef<VariantRow
         },
         header: "Status",
         id: "status",
+      });
+    }
+    case "price": {
+      // `accessor` rather than `display` because the column helper only offers
+      // the `align` sugar on accessor columns, and a right-aligned header over
+      // right-aligned figures is what makes a money column scannable. The
+      // accessor value is the amount itself (typed `unknown` so the column
+      // stays assignable alongside the display columns), which is the honest
+      // value for this column to carry. Sorting stays off - the helper's
+      // default - because the API paginates server-side and sorting one page
+      // client-side would order the page, not the catalogue.
+      return columnHelper.accessor((row): unknown => selectVariantPrice(row.prices)?.price.amount, {
+        align: "right",
+        cell: ({ row }) => {
+          const selected = selectVariantPrice(row.original.prices);
+          return (
+            <MoneyCell
+              money={selected?.price ?? null}
+              otherCount={selected?.otherCount ?? 0}
+              title={
+                selected
+                  ? undefined
+                  : "This variant has no price set. That is normal for a variant that is not offered for sale."
+              }
+            />
+          );
+        },
+        header: "Shop",
+        id: "price",
+      });
+    }
+    case "srp": {
+      return columnHelper.accessor((row): unknown => readVariantSrp(row), {
+        align: "right",
+        cell: ({ row }) => {
+          const srp = readVariantSrp(row.original);
+          // `metadata.srp` is a bare amount: the store types a number, and
+          // nothing records what currency it is in. Rendering it under the shop
+          // price's currency would be inventing a fact, so the cell shows the
+          // number with no currency and says why on hover, rather than
+          // labelling it with a currency the data does not claim.
+          return (
+            <MoneyCell
+              money={srp === null ? null : { amount: srp, currency: null }}
+              title={
+                srp === null
+                  ? "No `srp` in this variant's or its product's metadata."
+                  : "SRP from metadata. It is stored as a bare amount, with no currency of its own."
+              }
+            />
+          );
+        },
+        header: "SRP",
+        id: "srp",
       });
     }
     default: {

@@ -65,9 +65,49 @@ products and flattening it client-side would give neither.
 | Variant     | The variant's own title (its option combination).                 |
 | SKU         | That one variant's SKU, or a muted "no sku".                      |
 | Status      | The parent product's status badge.                                |
+| Shop        | The variant's own price, with its currency.                       |
+| SRP         | The recommended price from `metadata.srp`, falling back to the product's. |
 
 There is no `handle` column: a URL slug is not something anyone scans a
 catalogue by, and it belongs to the parent product, not the row.
+
+### The money columns
+
+Shop price and SRP are **base** columns, not contributed ones, because both are
+core Medusa data that arrives with the row: the price set comes back under
+`*prices` and the SRP under `metadata` / `product.metadata`, all on the one
+`GET /admin/product-variants` request the table already makes. A page of 100
+variants therefore renders both prices with **zero** extra round trips. Pushing
+either into a plugin would mean re-fetching, per row, something that was already
+in hand.
+
+Two rules hold for every money cell, base or contributed:
+
+- **A cell never invents a number.** Amounts reach the table in different
+  shapes: a Medusa price `amount` is a `BigNumber` (a plain number over HTTP, a
+  live instance or a raw `{ value, precision }` object on other paths), while
+  `metadata.srp` is a bare string a store typed in. `readAmount` recognises each
+  shape explicitly - a `BigNumber` through `valueOf()`, its public coercion,
+  never through the trailing-underscore privates unless the object arrived
+  without a prototype - and returns `null`, never `0`, for anything unreadable.
+  Zero is a legitimate price, so "unreadable" has to stay distinguishable from
+  "free".
+- **A missing value is calm.** No price renders as a muted `-`, never a zero and
+  never an error state. For a store where only part of the catalogue is listed
+  for sale, "no price" is the correct answer for the rest of it.
+
+The SRP is shown **without a currency**, because `metadata.srp` does not record
+one. Labelling it with the shop price's currency would be asserting something
+the data does not say; the cell states that on hover instead.
+
+Both columns are right-aligned with `tabular-nums`, so decimal points line up
+down the column and across the row. They sit at the end of the base columns so
+that a contributed price column (`@zanreal/medusa-allegro` registers one) lands
+immediately after them and the prices read as one block.
+
+`readAmount`, `selectVariantPrice`, `readVariantSrp` and `formatAmount` are
+exported, so a contributor rendering money into this table can read and format
+it exactly the same way rather than re-deriving the rules.
 
 ### Clicking a row
 

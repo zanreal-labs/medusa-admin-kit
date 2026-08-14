@@ -35,6 +35,16 @@ describe("buildVariantListQuery", () => {
     expect(VARIANT_LIST_FIELDS).not.toContain("variants.");
   });
 
+  it("pulls both money sources onto the same request as the row", () => {
+    // This is what makes the shop-price and SRP columns cost zero extra
+    // requests: a page of 100 variants arrives with its prices and metadata
+    // already attached, so neither column ever fetches per row.
+    expect(VARIANT_LIST_FIELDS).toContain("*prices");
+    expect(VARIANT_LIST_FIELDS).toContain("metadata");
+    // The SRP falls back to the product's metadata, so that has to come too.
+    expect(VARIANT_LIST_FIELDS).toContain("product.metadata");
+  });
+
   it("includes a trimmed search as q, and omits blank searches", () => {
     expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20, search: "  boot  " }).q).toBe(
       "boot",
