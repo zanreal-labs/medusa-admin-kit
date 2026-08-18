@@ -57,7 +57,7 @@ rozszerzenia panelu.** Nie w ciele komponentu Reacta, nie w `useEffect`, nie w
 obsłudze zdarzenia, nie w module pomocniczym, który tylko twoja trasa importuje
 leniwie.
 
-Dlaczego to jest dokładnie właściwa zasada, a nie zabobon:
+Dlaczego to jest zasada, a nie zabobon:
 
 - `medusa plugin:build`, a po nim build panelu w aplikacji hostującej,
   **statycznie importują każdy widget i każdą trasę** do wygenerowanych modułów
@@ -68,7 +68,7 @@ Dlaczego to jest dokładnie właściwa zasada, a nie zabobon:
 - Trasa Catalog czyta rejestr dopiero **w momencie renderowania**, a do tego
   trzeba na nią wejść, czyli zawsze po starcie. Każda wtyczka, która
   zarejestrowała się przy starcie, jest więc na miejscu, zanim tabela zostanie
-  narysowana. Nie ma tu wyścigu do przegrania.
+  narysowana. Żadnego wyścigu tu nie ma.
 - Kod, który nie jest modułem rozszerzenia panelu, wykonuje się dopiero wtedy,
   gdy coś go w czasie działania wciągnie, a to może nastąpić po wyrenderowaniu
   tabeli albo nigdy. Przed tym właśnie chroni ta zasada.

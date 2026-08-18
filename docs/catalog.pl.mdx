@@ -99,8 +99,8 @@ Dwa szczegóły warto przejąć zamiast wymyślać od nowa:
 
 Brak ceny renderuje się jako wyszarzony `-`. Nigdy jako zero, nigdy jako stan
 błędu. W sklepie, w którym na sprzedaż wystawiona jest tylko część katalogu, „bez
-ceny” jest poprawną odpowiedzią dla reszty i operator ma to przewijać wzrokiem, a
-nie zatrzymywać się na tym.
+ceny” jest poprawną odpowiedzią dla reszty i operator ma to mijać wzrokiem, a nie
+zatrzymywać się na tym.
 
 ## Wybór jednej ceny z zestawu
 
@@ -113,8 +113,8 @@ miejsce na jedną, więc `selectVariantPrice` stosuje regułę, a nie zgadywank�
 2. Spośród kandydatów wygrywa najniższy kod waluty, dzięki czemu ten sam wariant
    zawsze pokazuje tę samą liczbę.
 3. Jeżeli wariant ma *wyłącznie* ceny warunkowe albo progowe, użyta zostaje jedna
-   z nich, zamiast myślnika. Wariant ma cenę, a twierdzenie, że jej nie ma, byłoby
-   większym kłamstwem.
+   z nich, zamiast myślnika. Wariant ma cenę, a twierdzenie, że jej nie ma, mija
+   się z prawdą bardziej niż pokazanie ceny warunkowej.
 
 To, czego komórka nie pokazuje, trafia do `otherCount` i renderuje się jako
 wyszarzone `+N`. Druga waluta ani próg ilościowy nie chowają się więc po cichu za
