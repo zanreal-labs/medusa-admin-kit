@@ -12,12 +12,12 @@
         "shop": "Shop",
         "srp": "SRP"
       },
-      "noSku": "no sku",
+      "noSku": "No SKU",
       "unknownStatus": "unknown",
       "priceTooltip": "This variant has no price set. That is normal for a variant that is not offered for sale.",
-      "srpTooltipMissing": "No `srp` in this variant's or its product's metadata.",
+      "srpTooltipMissing": "No srp in this variant's or its product's metadata.",
       "srpTooltipWithCurrency": "SRP from metadata, in the currency recorded beside it.",
-      "srpTooltipNoCurrency": "SRP from metadata. No `srp_currency` is recorded beside it, so no currency is shown.",
+      "srpTooltipNoCurrency": "SRP from metadata. No srp_currency is recorded beside it, so no currency is shown.",
       "cellError": "Error"
     }
   }
