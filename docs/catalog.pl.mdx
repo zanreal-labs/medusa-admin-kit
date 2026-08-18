@@ -1,0 +1,173 @@
+---
+title: Tabela Catalog
+description: "Jeden wiersz to jeden wariant: siedem kolumn wbudowanych i zasady, których trzyma się każda komórka z kwotą."
+---
+
+Trasa Catalog renderuje jedną tabelę. Ta strona opisuje, co się w niej znajduje,
+żeby kolumna dołożona przez inną wtyczkę stanęła obok kolumn wbudowanych, a nie
+powtarzała którejś z nich.
+
+## Wiersz to wariant, nie produkt
+
+Z tej decyzji wynika cała reszta.
+
+Stan magazynowy, cena, koszt, oferta na marketplace, kod kreskowy: każda z tych
+rzeczy należy do wariantu. Kiedy wierszem był produkt, kolumna z danymi na
+poziomie wariantu nie miała gdzie ich umieścić poza podsumowaniem, a podsumowanie
+nie odpowiada na nic. „12/13 z kosztem” nie mówi, ile cokolwiek kosztuje. „3
+oferty / 1 konflikt” nie mówi, które SKU jest zepsute. Jeden wariant na wiersz
+znosi cały ten rodzaj problemu, bo każda komórka ma wtedy dokładnie jedną wartość
+do pokazania.
+
+Technicznie tabela odpytuje `GET /admin/product-variants` i tym samym żądaniem
+dociąga produkt nadrzędny przez `fields`. Jeden wiersz z API to jeden wiersz
+tabeli, `count` liczy warianty, a stronicowanie jest dokładne. Pobranie strony
+produktów i spłaszczenie jej w przeglądarce nie dałoby żadnej z tych trzech
+rzeczy.
+
+Listę pól pakiet eksportuje jako `VARIANT_LIST_FIELDS`:
+
+```ts
+"id,title,sku,thumbnail,metadata,*prices,product.id,product.title,product.handle,product.status,product.thumbnail,product.metadata"
+```
+
+## Kolumny wbudowane
+
+Nagłówki są tłumaczone, więc po polsku operator widzi je tak:
+
+| Nagłówek    | Identyfikator | Co pokazuje dla jednego wariantu |
+| ----------- | ------------- | -------------------------------- |
+| (miniatura) | `thumbnail`   | Zdjęcie wariantu, a gdy go nie ma, zdjęcie produktu; przy braku obu placeholder `Photo` z panelu Medusy. |
+| Produkt     | `product`     | Tytuł produktu nadrzędnego. |
+| Wariant     | `variant`     | Własny tytuł wariantu, czyli jego kombinację opcji. |
+| SKU         | `sku`         | SKU tego wariantu albo wyszarzone „Brak SKU”. |
+| Status      | `status`      | Status produktu nadrzędnego, jako kolorowa plakietka. |
+| Sklep       | `price`       | Własna cena wariantu wraz z walutą. |
+| SRP         | `srp`         | Cenę sugerowaną z `metadata.srp`, a gdy wariant swojej nie ma, z metadanych produktu. |
+
+Identyfikatory, w kolejności renderowania, są eksportowane jako
+`BASE_CATALOG_COLUMN_IDS`. Kolumna dołożona przez wtyczkę dostaje nagłówek, który
+poda ta wtyczka, więc jego przetłumaczenie zostaje po jej stronie. Kolumny wbudowane idą zawsze pierwsze, a każda kolumna
+zarejestrowana dopisuje się po nich.
+
+Nie ma kolumny `handle`. Slug z adresu URL nie jest tym, po czym ktokolwiek
+przegląda katalog, a do tego należy do produktu nadrzędnego, nie do wiersza.
+
+## Dlaczego kolumny z cenami są wbudowane
+
+Cena sklepowa i cena sugerowana są kolumnami wbudowanymi, a nie dołożonymi przez
+wtyczkę, bo obie to dane z rdzenia Medusy, które przychodzą razem z wierszem.
+Zestaw cen wraca pod `*prices`, a cena sugerowana siedzi w `metadata` oraz
+`product.metadata` i wszystko to jest w tym jednym żądaniu, które tabela i tak
+wykonuje. Strona ze stu wariantami renderuje więc obie ceny bez ani jednego
+dodatkowego zapytania. Przeniesienie którejkolwiek z nich do wtyczki oznaczałoby
+dociąganie, raz na wiersz, czegoś, co już było pod ręką.
+
+Stoją na końcu kolumn wbudowanych, żeby kolumna cenowa dołożona przez wtyczkę
+znalazła się tuż za nimi i żeby ceny czytało się jako jeden blok.
+
+## Zasady komórek z kwotami
+
+Dwie zasady obowiązują tak samo kolumny wbudowane, jak i dołożone. Obie pilnuje
+`readAmount`, wystawiony na zewnątrz właśnie po to, żeby autor kolumny nie musiał
+ich odtwarzać u siebie.
+
+### Komórka nigdy nie wymyśla liczby
+
+Kwoty docierają do tabeli w różnych postaciach. Pole `amount` w cenie Medusy to
+`BigNumber`: po HTTP zwykła liczba, na innych ścieżkach żywa instancja, surowy
+obiekt `{ value, precision }` albo obiekt spłaszczony, który zachował pola
+prywatne i stracił wszystkie akcesory. `metadata.srp` to z kolei goły napis, który
+ktoś wpisał w panelu.
+
+`readAmount` rozpoznaje każdą z tych postaci osobno i zwraca `null` dla
+wszystkiego, czego nie umie odczytać. Nigdy nie zwraca `0` w zastępstwie, bo zero
+jest poprawną ceną, a „nie da się odczytać” musi zostać odróżnialne od „za darmo”
+aż do samej komórki.
+
+Dwa szczegóły warto przejąć zamiast wymyślać od nowa:
+
+- `BigNumber` czytany jest przez `valueOf()`, czyli publiczny kontrakt konwersji
+  tej klasy. Pola prywatne z podkreśleniem na końcu wchodzą do gry wyłącznie dla
+  instancji, która zgubiła prototyp po serializacji.
+- Napisy przechodzą przez `Number`, nigdy przez `Number.parseFloat`.
+  `parseFloat("365 PLN")` daje `365`: zatrzymuje się na pierwszym znaku, którego
+  nie umie użyć, i po cichu wyrzuca resztę. Tak właśnie zepsute pole zamienia się
+  w wiarygodnie wyglądającą kwotę.
+
+### Brak wartości nie jest alarmem
+
+Brak ceny renderuje się jako wyszarzony `-`. Nigdy jako zero, nigdy jako stan
+błędu. W sklepie, w którym na sprzedaż wystawiona jest tylko część katalogu, „bez
+ceny” jest poprawną odpowiedzią dla reszty i operator ma to mijać wzrokiem, a nie
+zatrzymywać się na tym.
+
+## Wybór jednej ceny z zestawu
+
+Zestaw cen wariantu może mieścić kilka pozycji: po jednej na walutę, do tego ceny
+przypisane do regionu albo grupy klientów oraz progi ilościowe. W komórce jest
+miejsce na jedną, więc `selectVariantPrice` stosuje regułę, a nie zgadywankę:
+
+1. Najpierw ceny zwykłe, czyli te bez `rules` oraz bez `min_quantity` i
+   `max_quantity`.
+2. Spośród kandydatów wygrywa najniższy kod waluty, dzięki czemu ten sam wariant
+   zawsze pokazuje tę samą liczbę.
+3. Jeżeli wariant ma *wyłącznie* ceny warunkowe albo progowe, użyta zostaje jedna
+   z nich, zamiast myślnika. Wariant ma cenę, a twierdzenie, że jej nie ma, mija
+   się z prawdą bardziej niż pokazanie ceny warunkowej.
+
+To, czego komórka nie pokazuje, trafia do `otherCount` i renderuje się jako
+wyszarzone `+N`. Druga waluta ani próg ilościowy nie chowają się więc po cichu za
+tą jedną liczbą.
+
+## Cena sugerowana i jej waluta
+
+`readVariantSrp` czyta `metadata.srp` z wariantu, a gdy go tam nie ma, sięga do
+metadanych produktu. To sięgnięcie wyżej ma znaczenie: sklep, który ustawia jedną cenę sugerowaną dla
+całego produktu, nie powinien musieć powtarzać jej przy każdym wariancie, a
+konsumenci tej liczby po stronie serwera czytają ją z tym samym pierwszeństwem
+wariantu przed produktem.
+
+Waluta siedzi w **kluczu obok**, czyli `srp_currency` przy `srp`, i czyta ją
+`readVariantSrpMoney`. Szuka jej w tym samym obiekcie metadanych, z którego przyszła
+kwota, i nigdy pomiędzy dwoma obiektami, bo waluta ustawiona na produkcie nie ma
+prawa opisywać kwoty należącej do wariantu. Właśnie na takiej rozbieżności kwota w
+złotówkach wyświetla się jako euro.
+
+Kiedy klucza obok nie ma, komórka pokazuje samą liczbę i mówi o tym w dymku.
+Zejście do domyślnej waluty sklepu byłoby stwierdzeniem faktu, którego w danych
+nie ma, a zła waluta przy cenie jest gorsza niż jej brak.
+
+## Format
+
+`formatAmount` to `toFixed(2)`, bez separatora tysięcy zależnego od locale, a
+komórki są wyrównane do prawej z `tabular-nums`.
+
+To jest decyzja, nie przeoczenie. Te kolumny służą do porównywania cen w jednym
+wierszu i do przewijania jednej ceny w dół strony, a do tego potrzeba, żeby
+przecinek dziesiętny stał w tym samym miejscu w każdej komórce i znaczył to samo w
+każdej przeglądarce. Separator zależny od locale sprawiłby, że ten sam katalog
+czyta się inaczej u każdego operatora.
+
+## Kliknięcie w wiersz
+
+Wiersz otwiera **ten wariant**, pod `/products/:product_id/variants/:variant_id`.
+To jest wbudowana strona szczegółów wariantu i dokładnie ten sam adres, do którego
+linkuje tabela wariantów na stronie produktu, więc Catalog przekazuje
+użytkownika na ten sam ekran co reszta panelu, a ścieżka nawigacji wraca stamtąd
+do produktu. Link do produktu wyrzuciłby jedyną rzecz, którą wiersz wskazywał.
+
+Kliknięcie z Cmd, z Ctrl i środkowym przyciskiem otwiera stronę w nowej karcie,
+tak jak w pozostałych tabelach panelu. `variantDetailHref` zwraca `null`, gdy
+wiersz nie potrafi wskazać strony wariantu, więc obsługa kliknięcia po prostu
+rezygnuje z nawigacji zamiast wypychać zepsuty adres.
+
+## Szukanie i stronicowanie
+
+Wyszukiwarka mapuje się na parametr `q` w API, a fraza pusta lub złożona z samych
+spacji jest pomijana, a nie wysyłana jako puste `q`. Domyślny rozmiar strony to
+20, do wyboru są 10, 20, 50 i 100. Zmiana frazy cofa widok na pierwszą stronę.
+
+Sortowania kolumn nie ma. API stronicuje po stronie serwera, więc sortowanie
+jednej strony w przeglądarce uporządkowałoby stronę, a nie katalog, co jest z tych
+dwóch rzeczy bardziej mylące.

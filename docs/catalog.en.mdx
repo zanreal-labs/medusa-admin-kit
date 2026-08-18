@@ -1,0 +1,164 @@
+---
+title: The Catalog table
+description: One row per variant, the seven base columns the kit renders itself, and the rules every money cell in the table follows.
+---
+
+The Catalog route renders one table. This page describes what it puts in it, so
+that a column you contribute sits next to the base columns rather than repeating
+one of them.
+
+## A row is a variant, not a product
+
+This is the decision the rest of the table follows from.
+
+Stock, price, cost, a marketplace offer, a barcode: every one of those belongs to
+a variant. When a row was a product, a column carrying variant-level data had
+nowhere to put it except a roll-up, and a roll-up answers nothing. "12/13 costed"
+does not tell you what anything costs. "3 offers / 1 conflict" does not tell you
+which SKU is broken. One variant per row removes the whole category of problem,
+because each cell then has exactly one value to show.
+
+Mechanically the table queries `GET /admin/product-variants` and pulls the parent
+product in on the same request through `fields`. One API row is one table row,
+`count` is a variant count, and pagination is exact. Fetching a page of products
+and flattening it in the browser would give none of those three.
+
+The exact field list is exported as `VARIANT_LIST_FIELDS`:
+
+```ts
+"id,title,sku,thumbnail,metadata,*prices,product.id,product.title,product.handle,product.status,product.thumbnail,product.metadata"
+```
+
+## Base columns
+
+| Column      | What it shows for one variant row |
+| ----------- | --------------------------------- |
+| (thumbnail) | The variant's own image, falling back to the product's, and Medusa's `Photo` placeholder when there is neither. |
+| Product     | The parent product's title. |
+| Variant     | The variant's own title, which is its option combination. |
+| SKU         | That variant's SKU, or a muted "No SKU". |
+| Status      | The parent product's status, as a coloured badge. |
+| Shop        | The variant's own price, with its currency. |
+| SRP         | The recommended price from `metadata.srp`, falling back to the product's. |
+
+Their ids are exported in render order as `BASE_CATALOG_COLUMN_IDS`. Base columns
+always come first; every registered column is appended after them.
+
+There is no `handle` column. A URL slug is not something anyone scans a catalogue
+by, and it belongs to the parent product rather than to the row.
+
+## Why the money columns are built in
+
+Shop price and SRP are base columns rather than contributed ones because both are
+core Medusa data that arrives with the row. The price set comes back under
+`*prices`, and the SRP under `metadata` and `product.metadata`, all on the one
+request the table already makes. A page of 100 variants renders both prices with
+zero extra round trips. Pushing either into a plugin would mean re-fetching, once
+per row, something that was already in hand.
+
+They sit last among the base columns, so a contributed price column lands
+immediately after them and the prices read as one block.
+
+## Rules every money cell follows
+
+Two rules hold for base and contributed money cells alike. Both are enforced by
+`readAmount`, which is exported so a contributor can reuse it instead of
+re-deriving them.
+
+### A cell never invents a number
+
+Amounts reach the table in different shapes. A Medusa price `amount` is a
+`BigNumber`: a plain number over HTTP, a live instance on other paths, a raw
+`{ value, precision }` object, or a flattened object that kept the private fields
+and lost every accessor. `metadata.srp`, by contrast, is a bare string somebody
+typed into the admin.
+
+`readAmount` recognises each of those shapes explicitly and returns `null` for
+anything it cannot read. It never returns `0` as a stand-in, because zero is a
+legitimate price and "unreadable" has to stay distinguishable from "free" all the
+way to the cell.
+
+Two details in there are worth copying rather than reinventing:
+
+- A `BigNumber` is read through `valueOf()`, its public coercion contract. The
+  trailing-underscore privates are consulted only for an instance that lost its
+  prototype crossing a serialization boundary.
+- Strings go through `Number`, never `Number.parseFloat`. `parseFloat("365 PLN")`
+  is `365`: it stops at the first character it cannot use and silently drops the
+  rest, which is how a malformed field turns into a plausible amount.
+
+### A missing value is calm
+
+No price renders as a muted `-`. Never a zero, never an error state. For a store
+where only part of the catalogue is offered for sale, "no price" is the correct
+answer for the rest of it, and an operator should be able to skim past it.
+
+## Picking one price out of a price set
+
+A variant's price set can hold several prices: one per currency, plus
+region-scoped or customer-group-scoped ones and quantity tiers. The cell has room
+for one, so `selectVariantPrice` applies a rule rather than a guess:
+
+1. Prefer the plain per-unit prices, meaning those with no `rules` and no
+   `min_quantity` or `max_quantity`.
+2. Among the candidates, the lowest currency code wins, so the same variant always
+   shows the same number.
+3. When a variant has *only* scoped or tiered prices, use those rather than
+   rendering a dash. The variant does have a price, and saying it has none would
+   be the bigger lie.
+
+Whatever it does not show is counted in `otherCount` and rendered as a muted `+N`,
+so a second currency or a quantity tier is never silently hidden behind the one
+number in the cell.
+
+## The SRP and its currency
+
+`readVariantSrp` reads `metadata.srp` off the variant and falls back to the
+product's. The fallback matters: a store that sets one recommended price for a
+whole product should not have to repeat it on every variant, and the server-side
+consumers of that number read it with the same variant-then-product precedence.
+
+The currency is a **sibling key**, `srp_currency` beside `srp`, read by
+`readVariantSrpMoney`. It is looked up in the same metadata bag the amount came
+from and never across the two, because a product-wide currency has no business
+labelling a variant's own amount, and that mismatch is exactly how a PLN figure
+ends up displayed as EUR.
+
+When no sibling is recorded, the cell shows a bare number and says so on hover.
+Falling back to the store's default currency would be asserting a fact the data
+does not contain, and a wrong currency on a price is worse than an absent one.
+
+## Formatting
+
+`formatAmount` is `toFixed(2)`, with no locale grouping, and the cells are
+right-aligned with `tabular-nums`.
+
+That is deliberate rather than an oversight. The point of these columns is
+comparing prices across one row and scanning one price down the page, which needs
+the decimal point in the same place in every cell and the same meaning in every
+browser. A locale-dependent separator would make the same catalogue read
+differently for each operator.
+
+## Clicking a row
+
+A row opens **that variant**, at `/products/:product_id/variants/:variant_id`.
+That is the stock admin's own variant detail page, the same path the dashboard's
+product detail screen links its variant table to, so the Catalog hands the user
+to the screen the rest of the admin would and the breadcrumb there walks back up
+to the product. Linking to the product would throw away the one thing the row
+identified.
+
+Cmd-click, Ctrl-click and middle-click open it in a new tab, matching the
+dashboard's own rows. `variantDetailHref` returns `null` when the row cannot
+address a variant page, so the handler skips navigation instead of pushing a
+broken URL.
+
+## Search and pagination
+
+Search maps to the API's `q` parameter, and a blank or whitespace-only query is
+omitted rather than sent as an empty `q`. Page size defaults to 20, with 10, 20,
+50 and 100 offered in the toolbar. Changing the search resets to the first page.
+
+Column sorting is off. The API paginates server-side, so sorting one page in the
+browser would order the page rather than the catalogue, which is the more
+misleading of the two.

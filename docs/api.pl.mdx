@@ -1,0 +1,308 @@
+---
+title: Dokumentacja API
+description: "Wszystkie eksporty @zanreal/medusa-admin-kit: rejestr kolumn, budowanie kontekstu, odczyt kwot, mapowanie zapytań i typy."
+---
+
+Wszystko poniżej jest eksportowane z korzenia pakietu,
+`@zanreal/medusa-admin-kit`. Pakiet ma jeszcze podścieżkę `./admin`, czyli
+zbudowany bundle panelu, który wczytuje Medusa. Kod aplikacji nie importuje z
+niej nic wprost.
+
+## Rejestr kolumn
+
+### `registerVariantColumn`
+
+```ts
+function registerVariantColumn<TProduct extends CatalogProduct = CatalogProduct, TData = unknown>(
+  def: VariantColumnDef<TProduct, TData>,
+): void;
+```
+
+Dokłada kolumnę do tabeli Catalog. Wywołaj to na najwyższym poziomie modułu
+rozszerzenia panelu, co wyjaśnia [Dokładanie kolumny](./columns.pl.mdx). Ponowna
+rejestracja z tym samym `id` nadpisuje wcześniejszą definicję, dzięki czemu
+przeładowanie modułu w trakcie pracy niczego nie duplikuje.
+
+Rzuca `TypeError`, gdy `id` nie jest niepustym napisem albo gdy `cell` nie jest
+funkcją.
+
+### `getRegisteredVariantColumns`
+
+```ts
+function getRegisteredVariantColumns(): VariantColumnDef[];
+```
+
+Wszystkie zarejestrowane kolumny, posortowane rosnąco po `priority`, remisy
+zachowują kolejność rejestracji. Zwracana tablica jest świeżą kopią, więc jej
+modyfikowanie nie rusza rejestru.
+
+### `hasVariantColumn`, `getVariantColumn`
+
+```ts
+function hasVariantColumn(id: string): boolean;
+function getVariantColumn(id: string): VariantColumnDef | undefined;
+```
+
+### `unregisterVariantColumn`, `clearVariantColumns`
+
+```ts
+function unregisterVariantColumn(id: string): boolean;
+function clearVariantColumns(): void;
+```
+
+`unregisterVariantColumn` zwraca informację o tym, czy kolumna faktycznie została
+usunięta. `clearVariantColumns` służy do izolacji testów i resetów przy
+przeładowaniu modułów; kod produkcyjny nie powinien go potrzebować.
+
+### Aliasy oznaczone jako przestarzałe
+
+`registerProductColumn`, `getRegisteredProductColumns`, `hasProductColumn`,
+`getProductColumn`, `unregisterProductColumn` i `clearProductColumns` są
+aliasami powyższych nazw z `Variant`. To te same funkcje piszące do tego samego
+magazynu, więc wtyczka zbudowana na starszym API działa bez zmian.
+
+## Kontekst komórki
+
+### `buildVariantColumnContext`
+
+```ts
+function buildVariantColumnContext<TProduct extends CatalogProduct>(
+  row: CatalogVariantRow<TProduct>,
+): VariantColumnCellContext<TProduct>;
+```
+
+Przekształca wiersz wariantu z `GET /admin/product-variants` w kontekst
+przekazywany każdej komórce. To jedyne miejsce, w którym dzieje się
+normalizacja, więc komórka może ufać `ctx.variant`, `ctx.sku` i `ctx.product` bez
+wyliczania ich u siebie. Funkcja jest czysta, nie potrzebuje środowiska panelu.
+
+### `normalizeVariant`
+
+```ts
+function normalizeVariant(variant?: Partial<CatalogVariant> | null): CatalogVariant;
+```
+
+Uzupełnia surowy wariant do `{ id, sku, title, thumbnail }`. Brak `id` daje `""`,
+brak `sku`, `title` i `thumbnail` daje `null`.
+
+### `extractSkus`
+
+```ts
+function extractSkus(variants?: Partial<CatalogVariant>[] | null): string[];
+```
+
+Wszystkie niepuste SKU z listy wariantów, bez powtórzeń i w kolejności
+wystąpienia. Przydatne, gdy chcesz zebrać jedno zapytanie dla całej strony
+wyników.
+
+## Składanie listy kolumn
+
+### `BASE_CATALOG_COLUMN_IDS`
+
+```ts
+const BASE_CATALOG_COLUMN_IDS: readonly [
+  "thumbnail", "product", "variant", "sku", "status", "price", "srp",
+];
+```
+
+Kolumny wbudowane, w kolejności renderowania. `BaseCatalogColumnId` to unia tych
+literałów.
+
+### `resolveCatalogColumns`
+
+```ts
+function resolveCatalogColumns<TProduct extends CatalogProduct>(
+  registered: VariantColumnDef<TProduct>[],
+): ResolvedCatalogColumn<TProduct>[];
+```
+
+Scala kolumny wbudowane z zarejestrowanymi w finalną, uporządkowaną listę:
+najpierw wbudowane, potem zarejestrowane w kolejności, w jakiej zostały podane.
+Funkcja jest czysta, więc kontrakt kolejności da się sprawdzić testem bez panelu.
+
+`ResolvedCatalogColumn` to unia rozłączna: albo
+`{ id: BaseCatalogColumnId; source: "base" }`, albo
+`{ id: string; source: "registered"; def: VariantColumnDef<TProduct> }`.
+
+### `renderRegisteredCell`
+
+```ts
+function renderRegisteredCell<TProduct extends CatalogProduct, TData = unknown>(
+  def: VariantColumnDef<TProduct, TData>,
+  row: CatalogVariantRow<TProduct>,
+  async?: VariantColumnAsyncState<TData>,
+): ReactNode;
+```
+
+Synchroniczna połowa tego, co trasa robi dla każdego wiersza: zbuduj kontekst,
+podaj go do `cell` z definicji kolumny. Podanie `async` wprost pozwala sprawdzić
+gałęzie ładowania, danych i błędu w zwykłym teście w Node.
+
+## Kwoty
+
+### `readAmount`
+
+```ts
+function readAmount(value?: unknown): number | null;
+```
+
+Odczytuje kwotę z dowolnej postaci, w jakiej trzyma ją źródło: liczby, napisu z
+liczbą, żywego `BigNumber`, gołego obiektu `{ value, precision }` albo
+`BigNumber` spłaszczonego do zwykłego obiektu. Zwraca kwotę w jednostkach
+głównych albo `null`, gdy wartości nie ma lub nie da się jej odczytać. Nigdy `0`
+w zastępstwie któregokolwiek z tych przypadków.
+
+### `selectVariantPrice`
+
+```ts
+function selectVariantPrice(
+  prices?: readonly CatalogPrice[] | null,
+): VariantPriceSelection | null;
+```
+
+Wybiera tę jedną cenę, którą pokaże komórka. Pierwszeństwo mają ceny zwykłe,
+remis rozstrzyga najniższy kod waluty, a wariant mający wyłącznie ceny warunkowe
+lub progowe korzysta z nich, zamiast nie pokazać nic. Zwraca `null` tylko wtedy,
+gdy naprawdę nie ma czego odczytać.
+
+`VariantPriceSelection` to `{ price: CatalogMoney; otherCount: number }`, gdzie
+`otherCount` mówi, ile jeszcze odczytywalnych cen ma ten wariant.
+
+### `readVariantSrp`, `readVariantSrpMoney`
+
+```ts
+function readVariantSrp(row: SrpSource, key?: string): number | null;
+function readVariantSrpMoney(row: SrpSource, key?: string): CatalogMoney | null;
+```
+
+Obie czytają `metadata.srp` z wariantu, a gdy go tam nie ma, sięgają do metadanych
+produktu.
+`readVariantSrp` zwraca gołą liczbę, czyli to, co porównują konsumenci tej
+wartości po stronie serwera. `readVariantSrpMoney` czyta dodatkowo walutę z
+klucza obok, w tym samym obiekcie metadanych, z którego przyszła kwota, i nigdy
+pomiędzy dwoma obiektami; przy braku klucza obok zwraca `currency: null`.
+
+`SrpSource` to minimalny kształt, z którego czytają:
+`{ metadata?, product?: { metadata? } }`.
+
+### `SRP_METADATA_KEY`, `srpCurrencyKey`
+
+```ts
+const SRP_METADATA_KEY = "srp";
+function srpCurrencyKey(key?: string): string;
+```
+
+`srpCurrencyKey("srp")` daje `"srp_currency"`. Wyprowadzanie tej nazwy z klucza
+kwoty sprawia, że sklep, który przemianował `srp`, dostaje pasujący klucz obok bez
+żadnej dodatkowej konfiguracji.
+
+### `formatAmount`
+
+```ts
+function formatAmount(amount: number): string;
+```
+
+`toFixed(2)`, bez separatora tysięcy zależnego od locale, żeby przecinek
+dziesiętny stał w tym samym miejscu w każdej komórce i w każdej przeglądarce.
+
+### `CatalogMoney`, `CatalogPrice`
+
+```ts
+interface CatalogMoney {
+  amount: number;
+  currency: string | null;
+}
+
+interface CatalogPrice {
+  amount?: unknown;
+  currency_code?: string | null;
+  min_quantity?: number | null;
+  max_quantity?: number | null;
+  rules?: Record<string, unknown> | null;
+}
+```
+
+`CatalogMoney.currency` to kod ISO wielkimi literami albo `null`, gdy źródło
+trzyma gołą kwotę bez własnej waluty, czyli dokładnie tak, jak `metadata.srp`.
+`CatalogPrice.amount` jest celowo typu `unknown`, bo nie da się założyć, że
+przyjdzie liczba, nawet tam, gdzie opublikowany typ tak twierdzi. Typ
+`HttpTypes.AdminPrice` z Medusy jest strukturalnie zgodny z `CatalogPrice`.
+
+## Linki z wierszy
+
+### `variantDetailHref`
+
+```ts
+function variantDetailHref(row: CatalogVariantRow<CatalogProduct>): string | null;
+```
+
+`/products/:product_id/variants/:variant_id`, czyli wbudowana strona szczegółów
+wariantu. Ścieżka jest celowo względna wobec routera, bo router panelu jest
+zamontowany pod ścieżką bazową panelu. Zwraca `null`, gdy wiersz nie ma produktu
+nadrzędnego albo identyfikatora wariantu, więc wywołujący może zrezygnować z
+nawigacji, zamiast wypychać zepsuty adres.
+
+### `unwrapClickedRow`
+
+```ts
+function unwrapClickedRow<TRow>(clicked: TRow | { original: TRow }): TRow;
+```
+
+Rozpakowuje to, co `DataTable` z `@medusajs/ui` podaje do `onRowClick`.
+`useDataTable` typuje drugi argument jako `TData`, ale w wersji 4.2.0 tabela
+wywołuje go z opakowaniem `Row<TData>` z TanStacka. Czytanie `row.original` w
+ciemno psuje się, gdy typy zostaną kiedyś poprawione, a czytanie samego wiersza
+psuje się dzisiaj. Ta funkcja sprawdza obecność opakowania i przyjmuje obie
+postaci.
+
+## Mapowanie zapytań
+
+### `VARIANT_LIST_FIELDS`
+
+Napis `fields`, o który prosi tabela; obejmuje wariant, jego metadane, jego
+zestaw cen oraz produkt nadrzędny.
+
+### `buildVariantListQuery`
+
+```ts
+function buildVariantListQuery(input: VariantListQueryInput): VariantListQuery;
+```
+
+Zamienia `{ pageIndex, pageSize, search }` na `{ limit, offset, fields, q? }`.
+`offset` wychodzi z `pageIndex * pageSize`, a fraza pusta lub złożona z samych
+spacji jest pomijana, a nie wysyłana jako puste `q`.
+
+### `mapVariantListResponse`
+
+```ts
+function mapVariantListResponse<TVariant>(
+  response: VariantListResponse<TVariant> | null | undefined,
+): { variants: TVariant[]; count: number };
+```
+
+Normalizuje odpowiedź i radzi sobie z brakiem listy albo licznika.
+
+### `pageCount`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`
+
+```ts
+function pageCount(count: number, pageSize: number): number;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS: readonly [10, 20, 50, 100];
+```
+
+`pageCount` nigdy nie zwraca mniej niż 1.
+
+## Typy
+
+`CatalogVariant`, `CatalogProduct` i `CatalogVariantRow` opisują wiersz i są
+trzymane strukturalnie, bez wiązania z `@medusajs/types`, dzięki czemu rejestr
+wraz z funkcjami pomocniczymi da się zaimportować i przetestować bez środowiska
+panelu. Typy `HttpTypes.AdminProduct` i `HttpTypes.AdminProductVariant` z Medusy
+są z nimi strukturalnie zgodne.
+
+`VariantColumnDef`, `VariantColumnCellContext` i `VariantColumnAsyncState`
+opisuje [Dokładanie kolumny](./columns.pl.mdx).
+
+`ProductColumnVariant`, `ProductColumnProduct`, `ProductColumnCellContext`,
+`ProductColumnAsyncState` i `ProductColumnDef` to przestarzałe aliasy powyższych,
+zachowane po to, żeby niezmigrowana wtyczka nadal się kompilowała.

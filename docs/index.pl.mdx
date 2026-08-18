@@ -1,0 +1,92 @@
+---
+title: Wprowadzenie
+description: "Wtyczka do Medusa v2, która dokłada do panelu jedną rozszerzalną tabelę katalogu, plus rejestr kolumn, z którego korzystają pozostałe wtyczki."
+---
+
+`@zanreal/medusa-admin-kit` łączy w jednej paczce dwie rzeczy.
+
+Po pierwsze jest **wtyczką do Medusa v2**: po instalacji w bocznym menu panelu
+pojawia się pozycja **Catalog**, a pod nią tabela pod adresem `/app/catalog`, w
+której jeden wiersz to jeden wariant produktu.
+
+Po drugie jest **biblioteką**: inna wtyczka importuje z niej
+`registerVariantColumn` i jej kolumna renderuje się w tej samej tabeli, obok
+kolumn wbudowanych. To jest ta część, na której opierają się pozostałe wtyczki
+Medusy w ZanReal.
+
+## Po co to powstało
+
+Admin SDK Medusy 2.18 pozwala wtyczce wstawiać widgety w z góry ustalone strefy
+(`product.list.before`, `product.details.after` i pozostałe). Nie daje natomiast
+żadnego sposobu na dołożenie kolumny do wbudowanej tabeli produktów, bo ta
+tabela nie jest rozszerzalna.
+
+Wtyczka, która chce pokazać stan pojedynczego wiersza w trakcie przeglądania
+katalogu, ma więc dziś jedno wyjście: zbudować własną, pełną listę produktów. Po
+zainstalowaniu trzech takich wtyczek panel dostaje trzy niemal identyczne listy i
+żadna z nich nie widzi tego, co wiedzą pozostałe.
+
+Ten pakiet utrzymuje zamiast tego **jedną** listę, którą da się rozszerzać. Każda
+wtyczka dokłada definicję kolumny, pakiet renderuje je wszystkie w jednej tabeli,
+a o kolejności decyduje liczba, którą poda autor kolumny.
+
+## Instalacja
+
+```bash
+pnpm add @zanreal/medusa-admin-kit
+```
+
+Zarejestruj wtyczkę, żeby jej trasa trafiła do builda panelu:
+
+```ts title="medusa-config.ts"
+module.exports = defineConfig({
+  plugins: ["@zanreal/medusa-admin-kit"],
+});
+```
+
+Tyle wystarczy po stronie **aplikacji hostującej**. Pozycja Catalog pojawi się po
+najbliższym buildzie panelu.
+
+Pakiet wymaga Node.js w wersji 22.13 lub nowszej. Jako zależności równorzędne
+deklaruje Medusę 2.18.0 (`@medusajs/admin-sdk`, `@medusajs/admin-shared`,
+`@medusajs/framework`, `@medusajs/icons`, `@medusajs/js-sdk`, `@medusajs/ui`),
+React 18 oraz `react-i18next`. Projekt na Medusie ma je wszystkie u siebie.
+
+## Gdzie ląduje trasa
+
+Pod `/app/catalog`, z własną pozycją w menu bocznym podpisaną **Catalog**.
+Świadomie nie pod `/app/products`: tamten adres należy do wbudowanego panelu i
+obsługuje operacje na produktach, a Catalog jest powierzchnią do czytania, którą
+wtyczki dekorują, a nie zamiennikiem tamtej strony.
+
+Ścieżka trasy to po prostu nazwa katalogu w `src/admin/routes/`, więc fork może
+zamontować ją gdzie indziej, zmieniając nazwę katalogu i wartość `label` w
+`page.tsx`. Nic w `src/registry/` się przez to nie zmienia.
+
+Interfejs, który pakiet dostarcza, ma tłumaczenia polskie i angielskie przez
+`react-i18next`, w przestrzeni kluczy `adminKit.*`. Pozycja w menu bocznym jest
+wyjątkiem: to `label` z `defineRouteConfig`, czyli zwykły napis, więc w obu
+językach widnieje tam „Catalog”, a przetłumaczony nagłówek „Katalog” widać
+dopiero na samej stronie. Nagłówek kolumny dołożonej przez inną wtyczkę też jest
+napisem przekazanym przez tę wtyczkę, więc jego tłumaczenie zostaje po jej
+stronie.
+
+## Czego pakiet celowo nie robi
+
+Nie dostarcza kolumny pokazowej. Kiedyś taka była i okazała się błędem: pokazywała
+dokładnie to samo, co jedna z kolumn wbudowanych, więc realny sklep widział dwie
+kolumny mówiące to samo. Przykładowy kod ma miejsce w dokumentacji, a nie w
+bundlu, który instaluje u siebie każdy sklep.
+
+Nie przyjmuje też kolumn opisujących cały produkt. Rejestr ma jeden kształt
+kontekstu i opisuje on pojedynczy wariant. Dlaczego tak i co musi zmienić starsza
+kolumna produktowa, opisuje [Dokładanie kolumny](./columns.pl.mdx).
+
+## Co dalej
+
+- **[Tabela Catalog](./catalog.pl.mdx)** - czym jest wiersz, jakie kolumny są
+  wbudowane i jakich zasad trzymają się komórki z pieniędzmi.
+- **[Dokładanie kolumny](./columns.pl.mdx)** - kontrakt, który spełnia wtyczka,
+  żeby jej kolumna się wyrenderowała, razem z jedyną zasadą, której złamanie psuje
+  to po cichu.
+- **[Dokumentacja API](./api.pl.mdx)** - każdy eksport wraz z sygnaturą.
