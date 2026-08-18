@@ -1,0 +1,24 @@
+{
+  "adminKit": {
+    "catalog": {
+      "heading": "Katalog",
+      "description": "Jeden wiersz na wariant, osobno od standardowej listy produktów. Kolumny dodane przez zainstalowane wtyczki pojawiają się obok kolumn podstawowych. Kliknij wiersz, aby otworzyć dany wariant.",
+      "searchPlaceholder": "Szukaj wariantów",
+      "columns": {
+        "product": "Produkt",
+        "variant": "Wariant",
+        "sku": "SKU",
+        "status": "Status",
+        "shop": "Sklep",
+        "srp": "SRP"
+      },
+      "noSku": "brak SKU",
+      "unknownStatus": "nieznany",
+      "priceTooltip": "Ten wariant nie ma ustawionej ceny. To normalne dla wariantu, który nie jest wystawiony na sprzedaż.",
+      "srpTooltipMissing": "Brak wartości `srp` w metadanych tego wariantu ani jego produktu.",
+      "srpTooltipWithCurrency": "SRP z metadanych, w walucie zapisanej obok niej.",
+      "srpTooltipNoCurrency": "SRP z metadanych. Obok niej nie zapisano `srp_currency`, więc waluta nie jest pokazywana.",
+      "cellError": "Błąd"
+    }
+  }
+}

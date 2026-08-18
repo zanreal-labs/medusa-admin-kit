@@ -16,6 +16,7 @@ import type {
 } from "@medusajs/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { resolveCatalogColumns } from "../../../registry/columns";
 import type { BaseCatalogColumnId } from "../../../registry/columns";
@@ -68,6 +69,7 @@ function statusColor(
 /** Build one of the kit's base columns by id. */
 function buildBaseColumn(
   id: BaseCatalogColumnId,
+  t: (key: string) => string,
 ): DataTableColumnDef<VariantRow, unknown> {
   switch (id) {
     case "thumbnail": {
@@ -92,7 +94,7 @@ function buildBaseColumn(
             {row.original.product?.title ?? "-"}
           </span>
         ),
-        header: "Product",
+        header: t("adminKit.catalog.columns.product"),
         id: "product",
       });
     }
@@ -103,7 +105,7 @@ function buildBaseColumn(
             {row.original.title ?? "-"}
           </Text>
         ),
-        header: "Variant",
+        header: t("adminKit.catalog.columns.variant"),
         id: "variant",
       });
     }
@@ -115,11 +117,11 @@ function buildBaseColumn(
             <Text size="small">{sku}</Text>
           ) : (
             <Text className="text-ui-fg-muted" size="small">
-              no sku
+              {t("adminKit.catalog.noSku")}
             </Text>
           );
         },
-        header: "SKU",
+        header: t("adminKit.catalog.columns.sku"),
         id: "sku",
       });
     }
@@ -129,11 +131,11 @@ function buildBaseColumn(
           const status = row.original.product?.status;
           return (
             <StatusBadge color={statusColor(status)}>
-              {status ?? "unknown"}
+              {status ?? t("adminKit.catalog.unknownStatus")}
             </StatusBadge>
           );
         },
-        header: "Status",
+        header: t("adminKit.catalog.columns.status"),
         id: "status",
       });
     }
@@ -159,12 +161,12 @@ function buildBaseColumn(
                 title={
                   selected
                     ? undefined
-                    : "This variant has no price set. That is normal for a variant that is not offered for sale."
+                    : t("adminKit.catalog.priceTooltip")
                 }
               />
             );
           },
-          header: "Shop",
+          header: t("adminKit.catalog.columns.shop"),
           id: "price",
         },
       );
@@ -185,15 +187,15 @@ function buildBaseColumn(
               money={srp}
               title={
                 srp === null
-                  ? "No `srp` in this variant's or its product's metadata."
+                  ? t("adminKit.catalog.srpTooltipMissing")
                   : srp.currency
-                    ? "SRP from metadata, in the currency recorded beside it."
-                    : "SRP from metadata. No `srp_currency` is recorded beside it, so no currency is shown."
+                    ? t("adminKit.catalog.srpTooltipWithCurrency")
+                    : t("adminKit.catalog.srpTooltipNoCurrency")
               }
             />
           );
         },
-        header: "SRP",
+        header: t("adminKit.catalog.columns.srp"),
         id: "srp",
       });
     }
@@ -219,19 +221,21 @@ function useCatalogColumns(): DataTableColumnDef<VariantRow, unknown>[] {
   // navigation), so by the time this route mounts the registry is fully
   // populated. Computing once per mount is enough; a real change to the set of
   // installed plugins is a full admin reload.
+  const { t } = useTranslation();
   return useMemo(() => {
     const registered =
       getRegisteredVariantColumns() as VariantColumnDef<AdminProduct>[];
     return resolveCatalogColumns<AdminProduct>(registered).map((entry) =>
       entry.source === "base"
-        ? buildBaseColumn(entry.id)
+        ? buildBaseColumn(entry.id, t)
         : buildRegisteredColumn(entry.def),
     );
-  }, []);
+  }, [t]);
 }
 
 const CatalogPage = () => {
   const columns = useCatalogColumns();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [pagination, setPagination] = useState<DataTablePaginationState>({
     pageIndex: 0,
@@ -316,14 +320,14 @@ const CatalogPage = () => {
       <DataTable instance={instance}>
         <DataTable.Toolbar className="flex flex-col items-start justify-between gap-y-3 px-6 py-4 md:flex-row md:items-center">
           <div className="flex flex-col gap-y-1">
-            <Heading level="h2">Catalog</Heading>
+            <Heading level="h2">{t("adminKit.catalog.heading")}</Heading>
             <Text className="text-ui-fg-subtle" size="small">
-              One row per variant, separate from the stock Products page.
-              Columns contributed by installed plugins render alongside the base
-              columns. Click a row to open that variant.
+              {t("adminKit.catalog.description")}
             </Text>
           </div>
-          <DataTable.Search placeholder="Search variants" />
+          <DataTable.Search
+            placeholder={t("adminKit.catalog.searchPlaceholder")}
+          />
         </DataTable.Toolbar>
         <DataTable.Table />
         <DataTable.Pagination />
