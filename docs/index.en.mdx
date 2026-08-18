@@ -1,0 +1,88 @@
+---
+title: Overview
+description: A Medusa v2 plugin that owns one extensible catalogue table, plus the column registry sibling plugins import to put their own data into it.
+---
+
+`@zanreal/medusa-admin-kit` is two things in one package.
+
+It is a **Medusa v2 plugin**: install it and the admin gains a **Catalog** entry
+in the sidebar, a table at `/app/catalog` with one row per product variant.
+
+It is also a **library**: another plugin imports `registerVariantColumn` from it,
+and its column renders in that same table, beside the built-in ones. That is the
+part the other ZanReal Medusa plugins depend on.
+
+## The problem it solves
+
+Medusa 2.18's admin SDK lets a plugin inject widgets into fixed zones
+(`product.list.before`, `product.details.after` and the rest). It gives a plugin
+no way at all to add a column to the core products data table, because that table
+is not extensible.
+
+So a plugin that wants to show per-row state while someone is browsing the
+catalogue has exactly one option today: ship its own full products page. Install
+three such plugins and the admin grows three near-identical product lists, and
+none of them can see what the others know.
+
+This kit owns **one** list that is extensible instead. Every plugin contributes a
+column definition, the kit renders them all in a single table, and the ordering
+between them is a number the contributor sets.
+
+## Install
+
+```bash
+pnpm add @zanreal/medusa-admin-kit
+```
+
+Register the plugin so its admin route ships with your admin build:
+
+```ts title="medusa-config.ts"
+module.exports = defineConfig({
+  plugins: ["@zanreal/medusa-admin-kit"],
+});
+```
+
+That is everything a **host** application needs. The Catalog route appears after
+the next admin build.
+
+The package requires Node.js 22.13 or newer, and it declares Medusa 2.18.0
+(`@medusajs/admin-sdk`, `@medusajs/admin-shared`, `@medusajs/framework`,
+`@medusajs/icons`, `@medusajs/js-sdk`, `@medusajs/ui`), React 18 and
+`react-i18next` as peer dependencies. A Medusa project already has all of them.
+
+## Where the route lands
+
+At `/app/catalog`, with its own sidebar item labelled **Catalog**. It is
+deliberately not `/app/products`: the stock admin owns that path for product CRUD,
+and the Catalog is a read surface plugins decorate, not a replacement for it.
+
+The route path is simply the folder name under `src/admin/routes/`, so a fork can
+mount it somewhere else by renaming the folder and the `label` in `page.tsx`,
+with nothing under `src/registry/` affected.
+
+The admin UI it ships is translated into English and Polish through
+`react-i18next`, under the `adminKit.*` key namespace. The sidebar entry is the
+exception: it is the `label` on `defineRouteConfig`, a plain literal, so it reads
+"Catalog" in both languages while the translated heading appears on the page
+itself. A contributed column's header is likewise a string the contributor passes
+in, so translating that one is the contributing plugin's job, not the kit's.
+
+## What it deliberately does not ship
+
+No demo column. It used to have one, and that was a bug: the demo rendered the
+same information as a base column, so a real store saw two columns saying the
+same thing. Example code belongs in documentation, not in the bundle every store
+installs.
+
+No product-shaped columns either. The registry has one context shape and it
+describes a single variant. See [Contributing a column](./columns.en.mdx) for why,
+and for what an older product-row column has to change.
+
+## Where to go next
+
+- **[The Catalog table](./catalog.en.mdx)** - what a row is, which columns come
+  built in, and the rules the money cells follow.
+- **[Contributing a column](./columns.en.mdx)** - the contract another plugin
+  follows to get its column rendered, including the one rule that silently breaks
+  it.
+- **[API reference](./api.en.mdx)** - every export, with its signature.

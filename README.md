@@ -6,6 +6,9 @@ route - a table with **one row per product variant** - and a cross-plugin
 own columns into that one table instead of each shipping a separate products
 page.
 
+Full documentation, in English and Polish, is published at
+<https://zanreal.com/docs/oss/medusa-admin-kit> and authored in [`docs/`](./docs).
+
 It is two things in one package:
 
 1. **An importable library.** `registerVariantColumn(def)`,

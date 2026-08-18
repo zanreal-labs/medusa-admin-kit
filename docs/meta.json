@@ -1,0 +1,5 @@
+{
+  "title": "@zanreal/medusa-admin-kit",
+  "description": "An extensible Catalog table for the Medusa v2 admin, and the column registry sibling plugins write to.",
+  "pages": ["index", "catalog", "columns", "api"]
+}

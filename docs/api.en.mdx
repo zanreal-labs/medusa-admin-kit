@@ -1,0 +1,301 @@
+---
+title: API reference
+description: Every export of @zanreal/medusa-admin-kit - the column registry, the context builders, the money readers, the query mappers and the types.
+---
+
+Everything below is exported from the package root, `@zanreal/medusa-admin-kit`.
+The package also has a `./admin` subpath, which is the built admin bundle Medusa
+loads. Nothing in application code imports from it directly.
+
+## Column registry
+
+### `registerVariantColumn`
+
+```ts
+function registerVariantColumn<TProduct extends CatalogProduct = CatalogProduct, TData = unknown>(
+  def: VariantColumnDef<TProduct, TData>,
+): void;
+```
+
+Adds a column to the shared Catalog table. Call it at the top level of an admin
+extension module, which is the rule [Contributing a column](./columns.en.mdx)
+explains. Registering twice with the same `id` replaces the earlier definition,
+which also makes hot module replacement a no-op rather than a duplicate.
+
+Throws a `TypeError` when `id` is not a non-empty string, or when `cell` is not a
+function.
+
+### `getRegisteredVariantColumns`
+
+```ts
+function getRegisteredVariantColumns(): VariantColumnDef[];
+```
+
+Every registered column, ordered by ascending `priority`, ties keeping
+registration order. The returned array is a fresh copy, so mutating it does not
+touch the registry.
+
+### `hasVariantColumn`, `getVariantColumn`
+
+```ts
+function hasVariantColumn(id: string): boolean;
+function getVariantColumn(id: string): VariantColumnDef | undefined;
+```
+
+### `unregisterVariantColumn`, `clearVariantColumns`
+
+```ts
+function unregisterVariantColumn(id: string): boolean;
+function clearVariantColumns(): void;
+```
+
+`unregisterVariantColumn` returns whether a column was actually removed.
+`clearVariantColumns` is meant for test isolation and hot-reload resets;
+production code should not need it.
+
+### Deprecated aliases
+
+`registerProductColumn`, `getRegisteredProductColumns`, `hasProductColumn`,
+`getProductColumn`, `unregisterProductColumn` and `clearProductColumns` are kept
+as aliases of the `Variant` names above. They are the same functions writing to
+the same store, so a plugin built against the older API keeps working untouched.
+
+## Cell context
+
+### `buildVariantColumnContext`
+
+```ts
+function buildVariantColumnContext<TProduct extends CatalogProduct>(
+  row: CatalogVariantRow<TProduct>,
+): VariantColumnCellContext<TProduct>;
+```
+
+Shapes a variant row from `GET /admin/product-variants` into the context handed
+to every cell. The single place normalization happens, so a cell can trust
+`ctx.variant`, `ctx.sku` and `ctx.product` without re-deriving them. Pure, so it
+needs no admin runtime.
+
+### `normalizeVariant`
+
+```ts
+function normalizeVariant(variant?: Partial<CatalogVariant> | null): CatalogVariant;
+```
+
+Fills a raw variant out to `{ id, sku, title, thumbnail }`. A missing `id`
+becomes `""`; missing `sku`, `title` and `thumbnail` become `null`.
+
+### `extractSkus`
+
+```ts
+function extractSkus(variants?: Partial<CatalogVariant>[] | null): string[];
+```
+
+Every non-empty SKU across a list of variants, de-duplicated and in order. Useful
+for batching a lookup across a page of rows.
+
+## Column resolution
+
+### `BASE_CATALOG_COLUMN_IDS`
+
+```ts
+const BASE_CATALOG_COLUMN_IDS: readonly [
+  "thumbnail", "product", "variant", "sku", "status", "price", "srp",
+];
+```
+
+The kit's own columns, in render order. `BaseCatalogColumnId` is the union of
+those literals.
+
+### `resolveCatalogColumns`
+
+```ts
+function resolveCatalogColumns<TProduct extends CatalogProduct>(
+  registered: VariantColumnDef<TProduct>[],
+): ResolvedCatalogColumn<TProduct>[];
+```
+
+Merges the base columns with the registered ones into the final ordered list:
+base columns first, then the registered columns in the order they were passed in.
+Pure, so the ordering contract can be asserted without a dashboard.
+
+`ResolvedCatalogColumn` is a discriminated union, either
+`{ id: BaseCatalogColumnId; source: "base" }` or
+`{ id: string; source: "registered"; def: VariantColumnDef<TProduct> }`.
+
+### `renderRegisteredCell`
+
+```ts
+function renderRegisteredCell<TProduct extends CatalogProduct, TData = unknown>(
+  def: VariantColumnDef<TProduct, TData>,
+  row: CatalogVariantRow<TProduct>,
+  async?: VariantColumnAsyncState<TData>,
+): ReactNode;
+```
+
+The synchronous half of what the route does per row: build the context, hand it
+to the column's `cell`. Passing `async` directly is how a column's loading, data
+and error branches get exercised in a plain Node test.
+
+## Money
+
+### `readAmount`
+
+```ts
+function readAmount(value?: unknown): number | null;
+```
+
+Reads an amount out of whatever shape its source stores it in: a number, a
+numeric string, a live `BigNumber`, a bare `{ value, precision }` object, or a
+`BigNumber` flattened into a plain object. Returns the amount in major units, or
+`null` when the value is absent or unreadable. Never `0` as a stand-in for
+either.
+
+### `selectVariantPrice`
+
+```ts
+function selectVariantPrice(
+  prices?: readonly CatalogPrice[] | null,
+): VariantPriceSelection | null;
+```
+
+Picks the one price a shop-price cell shows. Plain per-unit prices are preferred,
+lowest currency code wins the tie, and a variant with only scoped or tiered
+prices uses those rather than rendering nothing. Returns `null` only when there
+is genuinely nothing readable.
+
+`VariantPriceSelection` is `{ price: CatalogMoney; otherCount: number }`, where
+`otherCount` is how many other readable prices the variant has.
+
+### `readVariantSrp`, `readVariantSrpMoney`
+
+```ts
+function readVariantSrp(row: SrpSource, key?: string): number | null;
+function readVariantSrpMoney(row: SrpSource, key?: string): CatalogMoney | null;
+```
+
+Both read `metadata.srp` off the variant and fall back to the product's.
+`readVariantSrp` returns a bare number, which is what the server-side consumers of
+that figure compare. `readVariantSrpMoney` also reads the currency from the
+sibling key, in the same metadata bag the amount came from and never across the
+two, and yields `currency: null` when no sibling is recorded.
+
+`SrpSource` is the minimal shape they read: `{ metadata?, product?: { metadata? } }`.
+
+### `SRP_METADATA_KEY`, `srpCurrencyKey`
+
+```ts
+const SRP_METADATA_KEY = "srp";
+function srpCurrencyKey(key?: string): string;
+```
+
+`srpCurrencyKey("srp")` is `"srp_currency"`. Deriving it from the amount's key
+means a store that renamed `srp` gets the matching sibling for free.
+
+### `formatAmount`
+
+```ts
+function formatAmount(amount: number): string;
+```
+
+`toFixed(2)`, with no locale grouping, so the decimal point lands in the same
+place in every cell and in every browser.
+
+### `CatalogMoney`, `CatalogPrice`
+
+```ts
+interface CatalogMoney {
+  amount: number;
+  currency: string | null;
+}
+
+interface CatalogPrice {
+  amount?: unknown;
+  currency_code?: string | null;
+  min_quantity?: number | null;
+  max_quantity?: number | null;
+  rules?: Record<string, unknown> | null;
+}
+```
+
+`CatalogMoney.currency` is an uppercase ISO code, or `null` when the source
+stores a bare amount with no currency of its own, which is exactly what
+`metadata.srp` is. `CatalogPrice.amount` is deliberately `unknown`, because it
+cannot be trusted to be a number even where the published type says so.
+Medusa's `HttpTypes.AdminPrice` is structurally assignable to `CatalogPrice`.
+
+## Row links
+
+### `variantDetailHref`
+
+```ts
+function variantDetailHref(row: CatalogVariantRow<CatalogProduct>): string | null;
+```
+
+`/products/:product_id/variants/:variant_id`, the stock admin's own variant
+detail page. Router-relative on purpose, since the admin router is mounted under
+the dashboard base path. Returns `null` when the row has no parent product or no
+variant id, so the caller can skip navigation rather than push a broken URL.
+
+### `unwrapClickedRow`
+
+```ts
+function unwrapClickedRow<TRow>(clicked: TRow | { original: TRow }): TRow;
+```
+
+Unwraps whatever `@medusajs/ui`'s `DataTable` hands an `onRowClick` handler.
+`useDataTable` types the second argument as `TData`, but at 4.2.0 the table calls
+it with TanStack's `Row<TData>` wrapper. Reading `row.original` blind breaks if
+that is ever corrected; reading the row blind breaks today. This probes for the
+wrapper and accepts both.
+
+## Query mapping
+
+### `VARIANT_LIST_FIELDS`
+
+The `fields` string the table requests, covering the variant, its metadata, its
+price set and the parent product.
+
+### `buildVariantListQuery`
+
+```ts
+function buildVariantListQuery(input: VariantListQueryInput): VariantListQuery;
+```
+
+Turns `{ pageIndex, pageSize, search }` into `{ limit, offset, fields, q? }`.
+`offset` is `pageIndex * pageSize`; a blank or whitespace-only search is omitted
+rather than sent as an empty `q`.
+
+### `mapVariantListResponse`
+
+```ts
+function mapVariantListResponse<TVariant>(
+  response: VariantListResponse<TVariant> | null | undefined,
+): { variants: TVariant[]; count: number };
+```
+
+Normalizes a response, tolerating a missing list or count.
+
+### `pageCount`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`
+
+```ts
+function pageCount(count: number, pageSize: number): number;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS: readonly [10, 20, 50, 100];
+```
+
+`pageCount` never returns less than 1.
+
+## Types
+
+`CatalogVariant`, `CatalogProduct` and `CatalogVariantRow` describe a row and are
+kept structural rather than tied to `@medusajs/types`, so the registry and its
+helpers can be imported and unit-tested without the admin runtime. Medusa's own
+`HttpTypes.AdminProduct` and `HttpTypes.AdminProductVariant` are structurally
+assignable to them.
+
+`VariantColumnDef`, `VariantColumnCellContext` and `VariantColumnAsyncState` are
+described in [Contributing a column](./columns.en.mdx).
+
+`ProductColumnVariant`, `ProductColumnProduct`, `ProductColumnCellContext`,
+`ProductColumnAsyncState` and `ProductColumnDef` are deprecated aliases of the
+above, kept so an unmigrated plugin still compiles.

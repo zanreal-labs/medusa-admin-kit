@@ -1,0 +1,255 @@
+---
+title: Dokładanie kolumny
+description: "Jak inna wtyczka Medusy rejestruje kolumnę w tabeli Catalog, jedyna zasada kolejności wykonania, której złamanie psuje to po cichu, oraz komórki asynchroniczne."
+---
+
+To jest API, z którego naprawdę korzystają pozostałe wtyczki. Trzymaj się go, a
+kolumna się pojawi. Złam jedyną zasadę dotyczącą kolejności wykonania, a nie
+pojawi się i nic o tym nie powie.
+
+## 1. Dodaj zależność
+
+```jsonc title="twoja-wtyczka/package.json"
+{
+  "dependencies": {
+    "@zanreal/medusa-admin-kit": "^0.1.0"
+  }
+}
+```
+
+## 2. Zarejestruj kolumnę na najwyższym poziomie modułu
+
+Utwórz widget w **swojej** wtyczce i wywołaj `registerVariantColumn` na
+**najwyższym poziomie modułu**. Nie w ciele komponentu, nie w efekcie, nie w
+pomocniczym module ładowanym leniwie.
+
+```tsx title="twoja-wtyczka/src/admin/widgets/register-columns.tsx"
+import { defineWidgetConfig } from "@medusajs/admin-sdk";
+import { Badge } from "@medusajs/ui";
+import { registerVariantColumn } from "@zanreal/medusa-admin-kit";
+
+// Wykonuje się raz, przy starcie panelu. To jest cały kontrakt.
+registerVariantColumn({
+  id: "product-costs.cost", // identyfikator z prefiksem twojej wtyczki
+  header: "Koszt",
+  priority: 20, // niższa liczba renderuje się wcześniej; domyślnie 0
+  cell: (ctx) => <Badge color={ctx.sku ? "green" : "grey"}>{ctx.sku ?? "-"}</Badge>,
+});
+
+// Widget musi mieć domyślny eksport komponentu i zadeklarowaną strefę. Ten nic
+// nie renderuje: rejestracja jest efektem ubocznym modułu i nie zależy od tego,
+// czy strefa jest w ogóle widoczna.
+const RegisterColumns = () => null;
+
+export const config = defineWidgetConfig({ zone: "product.list.before" });
+export default RegisterColumns;
+```
+
+Na kontrakt składają się trzy rzeczy: import `registerVariantColumn`, wywołanie
+go na najwyższym poziomie pliku w `src/admin/widgets/` albo `src/admin/routes/`,
+oraz domyślny eksport komponentu wraz z `zone`, żeby build panelu w ogóle ten plik
+wciągnął. Komponent może zwracać `null`, nigdy nie musi niczego wyrenderować.
+
+## Jedyna zasada kolejności wykonania
+
+**Wywołanie `registerVariantColumn` musi stać na najwyższym poziomie pliku
+rozszerzenia panelu.** Nie w ciele komponentu Reacta, nie w `useEffect`, nie w
+obsłudze zdarzenia, nie w module pomocniczym, który tylko twoja trasa importuje
+leniwie.
+
+Dlaczego to jest dokładnie właściwa zasada, a nie zabobon:
+
+- `medusa plugin:build`, a po nim build panelu w aplikacji hostującej,
+  **statycznie importują każdy widget i każdą trasę** do wygenerowanych modułów
+  `virtual:medusa/widgets` oraz `virtual:medusa/routes`, które panel wciąga przy
+  starcie. Import statyczny wykonuje moduł, więc kod na najwyższym poziomie
+  widgetu wykonuje się **raz, przy starcie panelu**, niezależnie od tego, czy
+  jego strefa kiedykolwiek się pokaże i czy ktoś wejdzie na twoją trasę.
+- Trasa Catalog czyta rejestr dopiero **w momencie renderowania**, a do tego
+  trzeba na nią wejść, czyli zawsze po starcie. Każda wtyczka, która
+  zarejestrowała się przy starcie, jest więc na miejscu, zanim tabela zostanie
+  narysowana. Nie ma tu wyścigu do przegrania.
+- Kod, który nie jest modułem rozszerzenia panelu, wykonuje się dopiero wtedy,
+  gdy coś go w czasie działania wciągnie, a to może nastąpić po wyrenderowaniu
+  tabeli albo nigdy. Przed tym właśnie chroni ta zasada.
+
+## Definicja kolumny
+
+```ts
+interface VariantColumnDef<TProduct = CatalogProduct, TData = unknown> {
+  /** Stabilny, unikalny identyfikator z prefiksem wtyczki. Ponowna rejestracja tego samego id nadpisuje definicję. */
+  id: string;
+  /** Napis albo funkcja renderująca własny nagłówek. */
+  header: string | (() => ReactNode);
+  /** Klucz sortowania wśród kolumn zarejestrowanych. Niżej znaczy wcześniej; remisy zachowują kolejność rejestracji. Domyślnie 0. */
+  priority?: number;
+  /** Renderuje komórkę dla jednego wiersza. `async` jest ustawione tylko wtedy, gdy ustawione jest `loadData`. */
+  cell: (
+    ctx: VariantColumnCellContext<TProduct>,
+    async?: VariantColumnAsyncState<TData>,
+  ) => ReactNode;
+  /** Opcjonalne pobranie danych dla komórki opartej o zapytanie sieciowe. */
+  loadData?: (ctx: VariantColumnCellContext<TProduct>) => Promise<TData>;
+}
+```
+
+`registerVariantColumn` rzuca `TypeError`, gdy `id` nie jest niepustym napisem
+albo gdy `cell` nie jest funkcją. Zwykły `TypeError`, a nie `MedusaError`, bo ten
+kod działa w bundlu przeglądarki i chodzi o pomyłkę autora wtyczki, a nie o
+status HTTP.
+
+Kolejność jest taka: najpierw kolumny wbudowane, w kolejności z
+`BASE_CATALOG_COLUMN_IDS`, potem wszystkie zarejestrowane, posortowane rosnąco po
+`priority`. Remisy zachowują kolejność rejestracji.
+
+## Kontekst komórki
+
+Każda komórka dostaje otypowany kontekst, budowany raz na wiersz przez
+`buildVariantColumnContext`:
+
+```ts
+interface VariantColumnCellContext<TProduct> {
+  variant: { id: string; sku: string | null; title: string | null; thumbnail: string | null };
+  variantId: string;
+  sku: string | null;
+  product: TProduct | null;
+  productId: string | null;
+}
+```
+
+`product` jest nullowalne, bo wiersz da się w zasadzie pobrać bez produktu. Trasa
+Catalog zawsze o niego prosi, więc w praktyce jest, ale komórka sięgająca po pola
+produktu i tak musi obsłużyć `null`, żeby przeszła kontrolę typów.
+
+`TProduct` domyślnie wskazuje na strukturalny `CatalogProduct`. Typ
+`HttpTypes.AdminProduct` z Medusy jest z nim strukturalnie zgodny, więc podaj go
+jako argument typu i zachowaj prawdziwy typ produktu na całej długości.
+
+## Komórki asynchroniczne
+
+Większość kolumn opiera się na danych, które już są w `ctx`, i nigdy nie
+potrzebuje `loadData`. Kolumna oparta o zapytanie sieciowe ustawia `loadData`,
+zamiast pobierać dane wprost w `cell`:
+
+```tsx
+registerVariantColumn({
+  id: "product-costs.cost",
+  header: "Koszt",
+  priority: 20,
+  loadData: async (ctx) => (ctx.sku ? await fetchCost(ctx.sku) : null),
+  cell: (_ctx, async) => {
+    if (!async || async.isLoading) {
+      return <Text size="small">...</Text>;
+    }
+    if (async.error) {
+      return <Text className="text-ui-fg-error" size="small">-</Text>;
+    }
+    return <Badge>{async.data?.amount ?? "-"}</Badge>;
+  },
+});
+```
+
+Tabela renderuje się od razu i nigdy nie czeka na `loadData`. Każdy wiersz startuje
+w stanie `isLoading: true` i renderuje się ponownie, gdy pobranie się rozstrzygnie,
+przechodząc w `data` albo w `error`:
+
+```ts
+interface VariantColumnAsyncState<TData> {
+  data: TData | undefined;
+  isLoading: boolean;
+  error: unknown;
+}
+```
+
+`cell` dostaje `async: undefined` tylko w kolumnach, które nigdy nie ustawiają
+`loadData`, a kolumna z `loadData` zawsze dostaje zdefiniowane `async`. Komórka
+nigdy nie musi więc zgadywać, w którym z tych dwóch przypadków jest.
+
+`loadData` uruchamia się ponownie, gdy zmieni się tożsamość kontekstu wiersza, co
+dzieje się przy nowej stronie albo nowym wyszukiwaniu. Wyznacz wartość dla **tego
+jednego wariantu**: wiersz to pojedynczy wariant, więc iloraz albo podsumowanie w
+tym miejscu jest błędem, a nie skrótem.
+
+### Awaria zostaje w jednej komórce
+
+Jeżeli `cell` rzuci wyjątkiem, czy to synchronicznie, czy dlatego, że sięga po
+`async.data` będące `undefined` bez obsługi `async.error`, pakiet ten wyjątek
+przechwytuje i renderuje stan błędu w tej jednej komórce. Nie kładzie ani wiersza,
+ani tabeli, ani kolumny innej wtyczki.
+
+Wtyczka, której nie ma w instalacji, nigdy nie wywołuje `registerVariantColumn`,
+więc jej kolumna po prostu nie istnieje i nie ma tam czego psuć.
+
+## Dlaczego jeden rejestr działa mimo osobnych buildów
+
+Każda wtyczka jest budowana osobno przez `plugin:build`, który pakuje jej
+rozszerzenia panelu. Żeby rejestr dzielony między tymi bundlami działał, wszystkie
+muszą czytać i zapisywać ten sam magazyn.
+
+Magazyn jest zakotwiczony na `globalThis`, pod wersjonowanym kluczem `Symbol.for`:
+
+```
+Symbol.for("@zanreal/medusa-admin-kit/product-column-registry/v1")
+```
+
+Normalnie `@zanreal/medusa-admin-kit` rozwiązuje się w finalnym bundlu panelu do
+jednej instancji modułu, więc magazyn i tak jest jeden. Poprawność nie zależy
+jednak od tego. Nawet jeśli bundler skończy z kilkoma
+kopiami modułu, bo źle zadeklarowana zależność została wciągnięta do środka albo
+wersje się rozjechały, każda kopia w `getStore()` czyta ten sam obiekt spod
+`globalThis[Symbol.for(...)]`. Jeden magazyn, jeden zestaw kolumn.
+
+Dlatego kontrakt nie wymaga od autora wtyczki, żeby bezbłędnie ustawił swoje
+zależności jako zewnętrzne. Kotwica na `globalThis` sprawia, że druga kopia
+modułu niczego nie psuje.
+
+Klucz zostaje na `v1`, mimo że kształt kontekstu komórki zmienił się, gdy wiersze
+stały się wariantami. Podbicie wersji stworzyłoby dokładnie ten rozjazd, przed
+którym ten klucz chroni: trasa czytałaby magazyn `v2`, a niezmigrowana wtyczka
+zapisałaby swoją kolumnę do `v1` i ta kolumna zniknęłaby bez słowa.
+
+## Migracja kolumny napisanej dla wierszy produktowych
+
+Rejestr ma jeden kształt kontekstu i jest on wariantowy. Nie przyjmuje obok niego
+kolumny produktowej, bo komórka produktowa w tabeli wariantów potrafi tylko
+wyrenderować to samo podsumowanie w każdym wierszu danego produktu.
+
+Wtyczka, która nie zrobi zupełnie nic, zachowuje swoją kolumnę. Alias rejestracji
+nadal działa, a stare pola kontekstu nadal się rozwiązują, tyle że w zakresie
+jednego wariantu z tego wiersza, co jest zachowaniem poprawnym.
+
+| Dawniej | Teraz | Uwaga |
+| --- | --- | --- |
+| `registerProductColumn` | `registerVariantColumn` | Alias zachowany; ta sama funkcja, ten sam magazyn. |
+| `getRegisteredProductColumns` | `getRegisteredVariantColumns` | Alias zachowany. |
+| `hasProductColumn`, `getProductColumn`, `unregisterProductColumn`, `clearProductColumns` | `hasVariantColumn`, `getVariantColumn`, `unregisterVariantColumn`, `clearVariantColumns` | Aliasy zachowane. |
+| `ProductColumnDef`, `ProductColumnCellContext`, `ProductColumnAsyncState`, `ProductColumnVariant`, `ProductColumnProduct` | `VariantColumnDef`, `VariantColumnCellContext`, `VariantColumnAsyncState`, `CatalogVariant`, `CatalogProduct` | Aliasy typów zachowane. Kontekst zmienił kształt, patrz niżej. |
+| `ctx.skus` | `[ctx.sku]` | Nadal jest, teraz jedno SKU z tego wiersza. |
+| `ctx.firstSku` | `ctx.sku` | Nadal jest, ta sama wartość. |
+| `ctx.variants` | `[ctx.variant]` | Nadal jest, jeden wariant z tego wiersza. |
+| `ctx.variantCount` | zawsze `1` | Nadal jest. Każdy iloraz z tego to `n/1`; wyrzuć iloraz. |
+| `ctx.product` | `ctx.product`, nullowalne | Teraz `TProduct \| null` i nie niesie już tablicy `variants`. |
+| `buildProductColumnContext` | `buildVariantColumnContext` | **Usunięte**, bez aliasu. Przyjmowało produkt i nie da się tego uspójnić. |
+| `resolveProductColumns` | `resolveCatalogColumns` | **Zmieniona nazwa**, bez aliasu. Instalacja trasy, nie API dla wtyczek. |
+| `BASE_PRODUCT_COLUMN_IDS` | `BASE_CATALOG_COLUMN_IDS` | **Zmieniona nazwa**, bez aliasu. Zawartość też się zmieniła. |
+| `PRODUCT_LIST_FIELDS`, `buildProductListQuery`, `mapProductListResponse` | `VARIANT_LIST_FIELDS`, `buildVariantListQuery`, `mapVariantListResponse` | **Zmienione nazwy**, bez aliasów. Tabela odpytuje teraz warianty. |
+
+Migrowana kolumna powinna natomiast wyrzucić swoje agregacje, bo nie ma już czego
+agregować. `loadData`, które odpytywało `ctx.skus`, trafia teraz dokładnie w SKU
+tego wiersza, czyli w to, o co chodziło od początku.
+
+## Gdy build panelu się nie powiedzie
+
+Dwie różne awarie wyglądają podobnie i mają różne rozwiązania.
+
+**`"registerVariantColumn" is not exported by ".../src/index.js"`** oznacza, że
+bundler sparsował wejście CommonJS pakietu jako ESM. Pakiet dostarcza prawdziwe
+wejście ESM właśnie po to, żeby do tego nie doszło; jeśli widzisz ten komunikat,
+coś rozwiązuje się do builda CommonJS. Sprawdź, czy zainstalowany pakiet to
+wersja opublikowana, a nie stara kopia zbudowana ręcznie.
+
+**`Rollup failed to resolve import "@zanreal/medusa-admin-kit"`** to inny problem:
+pakietu nie ma nigdzie, skąd zbudowany plik twojej wtyczki mógłby go rozwiązać.
+Dodaj go do zależności aplikacji hostującej albo do workspace'u, żeby goły
+specyfikator rozwiązywał się ze ścieżki, pod którą wtyczka faktycznie leży na
+dysku.
