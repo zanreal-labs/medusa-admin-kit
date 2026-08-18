@@ -1,0 +1,24 @@
+{
+  "adminKit": {
+    "catalog": {
+      "heading": "Catalog",
+      "description": "One row per variant, separate from the stock Products page. Columns contributed by installed plugins render alongside the base columns. Click a row to open that variant.",
+      "searchPlaceholder": "Search variants",
+      "columns": {
+        "product": "Product",
+        "variant": "Variant",
+        "sku": "SKU",
+        "status": "Status",
+        "shop": "Shop",
+        "srp": "SRP"
+      },
+      "noSku": "No SKU",
+      "unknownStatus": "unknown",
+      "priceTooltip": "This variant has no price set. That is normal for a variant that is not offered for sale.",
+      "srpTooltipMissing": "No srp in this variant's or its product's metadata.",
+      "srpTooltipWithCurrency": "SRP from metadata, in the currency recorded beside it.",
+      "srpTooltipNoCurrency": "SRP from metadata. No srp_currency is recorded beside it, so no currency is shown.",
+      "cellError": "Error"
+    }
+  }
+}

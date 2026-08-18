@@ -1,5 +1,6 @@
 import { Text } from "@medusajs/ui";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { buildVariantColumnContext } from "../../registry/context";
 import type {
   CatalogProduct,
@@ -35,6 +36,7 @@ export function RegisteredVariantCell<TProduct extends CatalogProduct, TData = u
   def: VariantColumnDef<TProduct, TData>;
   row: CatalogVariantRow<TProduct>;
 }) {
+  const { t } = useTranslation();
   const ctx = useMemo(() => buildVariantColumnContext(row), [row]);
   const [asyncState, setAsyncState] = useState<VariantColumnAsyncState<TData>>(() => ({
     data: undefined,
@@ -75,7 +77,7 @@ export function RegisteredVariantCell<TProduct extends CatalogProduct, TData = u
   } catch {
     return (
       <Text className="text-ui-fg-error" size="small">
-        Error
+        {t("adminKit.catalog.cellError")}
       </Text>
     );
   }
