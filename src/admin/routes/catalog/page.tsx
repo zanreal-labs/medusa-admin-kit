@@ -342,7 +342,13 @@ const CatalogPage = () => {
 // sidebar entry, so it cannot replace or shadow the stock Products page.
 export const config = defineRouteConfig({
   icon: Tag,
-  label: "Catalog",
+  // A translation key, not a literal: the dashboard resolves it with
+  // `t(label, { ns: translationNs })`. This plugin registers its strings in the
+  // default `translation` namespace, and the dashboard's `fallbackNS` is that
+  // namespace, so the prefixed key resolves through it. The sidebar entry and the
+  // page heading deliberately read the same key and cannot drift apart.
+  label: "adminKit.catalog.heading",
+  translationNs: "adminKit",
 });
 
 export default CatalogPage;
