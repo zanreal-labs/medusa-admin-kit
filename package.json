@@ -23,6 +23,10 @@
     "type": "git",
     "url": "git+https://github.com/zanreal-labs/medusa-admin-kit.git"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "files": [
     ".medusa/server",
     "scripts",
