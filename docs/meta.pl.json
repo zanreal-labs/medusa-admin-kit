@@ -1,5 +1,5 @@
 {
-  "title": "@zanreal/medusa-admin-kit",
-  "description": "Rozszerzalna tabela katalogu w panelu Medusa v2 wraz z rejestrem kolumn, do którego piszą pozostałe wtyczki.",
+  "title": "Katalog i kolumny",
+  "description": "@zanreal/medusa-admin-kit to rozszerzalna tabela katalogu w panelu Medusa v2 wraz z rejestrem kolumn, do którego piszą pozostałe wtyczki.",
   "pages": ["index", "catalog", "columns", "api"]
 }
