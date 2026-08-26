@@ -1,6 +1,6 @@
 {
   "name": "@zanreal/medusa-admin-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Medusa v2 toolkit for an extensible admin products list. Sibling plugins register their own columns through a shared registry and they all render in one products table, instead of each plugin shipping a separate page.",
   "keywords": [
     "admin",
@@ -13,7 +13,7 @@
     "medusa-v2",
     "products"
   ],
-  "homepage": "https://github.com/zanreal-labs/medusa-admin-kit#readme",
+  "homepage": "https://zanreal.com/docs/oss/medusa-admin-kit",
   "bugs": {
     "url": "https://github.com/zanreal-labs/medusa-admin-kit/issues"
   },
