@@ -9,6 +9,7 @@
         "variant": "Variant",
         "sku": "SKU",
         "status": "Status",
+        "stock": "Stock",
         "shop": "Shop",
         "srp": "SRP"
       },
@@ -18,6 +19,8 @@
       "srpTooltipMissing": "No srp in this variant's or its product's metadata.",
       "srpTooltipWithCurrency": "SRP from metadata, in the currency recorded beside it.",
       "srpTooltipNoCurrency": "SRP from metadata. No srp_currency is recorded beside it, so no currency is shown.",
+      "stockTooltipUntracked": "Medusa does not manage inventory for this variant, so there is no quantity to show.",
+      "stockTooltipUnknown": "No stock level came back for this variant.",
       "cellError": "Error"
     }
   }

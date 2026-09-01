@@ -30,6 +30,7 @@ import {
   DEFAULT_PAGE_SIZE,
   mapVariantListResponse,
 } from "../../../registry/query";
+import { readVariantStock } from "../../../registry/stock";
 import {
   unwrapClickedRow,
   variantDetailHref,
@@ -38,6 +39,7 @@ import type { VariantColumnDef } from "../../../registry/types";
 import { getRegisteredVariantColumns } from "../../../registry/variant-columns";
 import { CatalogThumbnail } from "../../components/catalog-thumbnail";
 import { MoneyCell } from "../../components/money-cell";
+import { StockCell } from "../../components/stock-cell";
 import { RegisteredVariantCell } from "../../components/registered-variant-cell";
 import { sdk } from "../../lib/sdk";
 
@@ -138,6 +140,39 @@ function buildBaseColumn(
         header: t("adminKit.catalog.columns.status"),
         id: "status",
       });
+    }
+    case "stock": {
+      // `accessor` for the same reason the money columns are: the helper only
+      // offers right-alignment sugar on accessor columns, and a quantity reads
+      // as a quantity only when it is right-aligned under a right-aligned
+      // header. The accessor value is the quantity itself, and `undefined` for
+      // every row the store is not counting.
+      return columnHelper.accessor(
+        (row): unknown => {
+          const stock = readVariantStock(row);
+          return stock.state === "tracked" ? stock.quantity : undefined;
+        },
+        {
+          align: "right",
+          cell: ({ row }) => {
+            const stock = readVariantStock(row.original);
+            return (
+              <StockCell
+                stock={stock}
+                title={
+                  stock.state === "untracked"
+                    ? t("adminKit.catalog.stockTooltipUntracked")
+                    : (stock.state === "unknown"
+                      ? t("adminKit.catalog.stockTooltipUnknown")
+                      : undefined)
+                }
+              />
+            );
+          },
+          header: t("adminKit.catalog.columns.stock"),
+          id: "stock",
+        },
+      );
     }
     case "price": {
       // `accessor` rather than `display` because the column helper only offers

@@ -51,6 +51,17 @@ export interface CatalogVariantRow<TProduct extends CatalogProduct = CatalogProd
    * missing field.
    */
   prices?: readonly CatalogPrice[] | null;
+  /**
+   * Whether Medusa counts stock for this variant. Absent when the caller did
+   * not request it, which is why `readVariantStock` treats `undefined` and
+   * `false` as different answers.
+   */
+  manage_inventory?: boolean | null;
+  /**
+   * Units available across every stock location, computed by the admin route
+   * rather than stored. Only ever present on a variant that manages inventory.
+   */
+  inventory_quantity?: number | null;
 }
 
 /**

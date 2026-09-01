@@ -56,6 +56,8 @@ const PUBLIC_EXPORTS = [
   "readAmount",
   "readVariantSrp",
   "readVariantSrpMoney",
+  "readVariantStock",
+  "isVariantOutOfStock",
   "selectVariantPrice",
   "srpCurrencyKey",
   "getRegisteredVariantColumns",

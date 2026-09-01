@@ -9,6 +9,7 @@
         "variant": "Wariant",
         "sku": "SKU",
         "status": "Status",
+        "stock": "Stan magazynowy",
         "shop": "Sklep",
         "srp": "SRP"
       },
@@ -18,6 +19,8 @@
       "srpTooltipMissing": "Brak wartości srp w metadanych tego wariantu ani jego produktu.",
       "srpTooltipWithCurrency": "SRP z metadanych, w walucie zapisanej obok niej.",
       "srpTooltipNoCurrency": "SRP z metadanych. Obok niej nie zapisano srp_currency, więc waluta nie jest pokazywana.",
+      "stockTooltipUntracked": "Medusa nie prowadzi magazynu dla tego wariantu, więc nie ma czego pokazać.",
+      "stockTooltipUnknown": "Nie otrzymano stanu magazynowego dla tego wariantu.",
       "cellError": "Błąd"
     }
   }
