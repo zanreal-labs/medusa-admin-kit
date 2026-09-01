@@ -21,12 +21,17 @@ import type {
  *   catalogue by, it is a property of the parent product, and it was pure
  *   width; the product cell carries the product's identity instead.
  *
- * `price` and `srp` are base columns rather than contributed ones because both
- * are core Medusa data the kit already has in hand: the shop price is the
- * variant's own price set and the SRP is its own `metadata.srp`. Routing either
- * through the registry would mean a plugin re-fetching, per row, something that
- * arrived with the row. They sit last so the money columns form one contiguous
- * block with the price columns contributors add after them.
+ * `stock`, `price` and `srp` are base columns rather than contributed ones
+ * because all three are core Medusa data the kit already has in hand: the shop
+ * price is the variant's own price set, the SRP is its own `metadata.srp`, and
+ * the stock level is computed by the same admin route that returns the row
+ * (see `registry/query.ts`). Routing any of them through the registry would
+ * mean a plugin re-fetching, per row, something that arrived with the row.
+ *
+ * `stock` sits immediately before them rather than among them: it is a count,
+ * not money, and the two money columns are deliberately last so they form one
+ * contiguous block with the price columns contributors add after them. A
+ * quantity wedged between the shop price and the SRP would break that block.
  */
 export const BASE_CATALOG_COLUMN_IDS = [
   "thumbnail",
@@ -34,6 +39,7 @@ export const BASE_CATALOG_COLUMN_IDS = [
   "variant",
   "sku",
   "status",
+  "stock",
   "price",
   "srp",
 ] as const;

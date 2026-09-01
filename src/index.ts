@@ -72,6 +72,10 @@ export type {
 
 export { unwrapClickedRow, variantDetailHref } from "./registry/row-link";
 
+export { isVariantOutOfStock, readVariantStock } from "./registry/stock";
+
+export type { VariantStock } from "./registry/stock";
+
 export {
   buildVariantListQuery,
   DEFAULT_PAGE_SIZE,

@@ -45,6 +45,15 @@ describe("buildVariantListQuery", () => {
     expect(VARIANT_LIST_FIELDS).toContain("product.metadata");
   });
 
+  it("pulls the stock level onto that same request, with the field that makes it readable", () => {
+    // `inventory_quantity` is computed by the admin route rather than stored,
+    // and its wrapper skips any variant that does not manage inventory. Without
+    // `manage_inventory` alongside it, an untracked variant and a sold-out one
+    // arrive identical - so the pair is the contract, not just the quantity.
+    expect(VARIANT_LIST_FIELDS).toContain("inventory_quantity");
+    expect(VARIANT_LIST_FIELDS).toContain("manage_inventory");
+  });
+
   it("includes a trimmed search as q, and omits blank searches", () => {
     expect(buildVariantListQuery({ pageIndex: 0, pageSize: 20, search: "  boot  " }).q).toBe(
       "boot",

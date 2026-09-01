@@ -30,11 +30,22 @@ export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
  * - `metadata` and `product.metadata` back the SRP column, which reads
  *   `metadata.srp` off the variant and falls back to the product's.
  *
- * A page of 100 variants therefore renders both prices with **zero** extra
- * round trips.
+ * Stock rides the same request, and needs two fields rather than one:
+ *
+ * - `inventory_quantity` is not a stored column. Asking for it makes the admin
+ *   route strip it from the graph query and then wrap the result with
+ *   `getTotalVariantAvailability`, so the figure is computed server-side and
+ *   arrives on the row.
+ * - `manage_inventory` is what makes that figure readable. The wrapper skips
+ *   any variant that does not manage inventory, so without this field an
+ *   untracked variant is indistinguishable from one that has sold out. See
+ *   `registry/stock.ts`.
+ *
+ * A page of 100 variants therefore renders both prices and the stock level with
+ * **zero** extra round trips.
  */
 export const VARIANT_LIST_FIELDS =
-  "id,title,sku,thumbnail,metadata,*prices,product.id,product.title,product.handle,product.status,product.thumbnail,product.metadata";
+  "id,title,sku,thumbnail,metadata,manage_inventory,inventory_quantity,*prices,product.id,product.title,product.handle,product.status,product.thumbnail,product.metadata";
 
 /** UI state the table holds. */
 export interface VariantListQueryInput {
