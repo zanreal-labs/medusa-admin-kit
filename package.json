@@ -1,6 +1,6 @@
 {
   "name": "@zanreal/medusa-admin-kit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Medusa v2 toolkit for an extensible admin products list. Sibling plugins register their own columns through a shared registry and they all render in one products table, instead of each plugin shipping a separate page.",
   "keywords": [
     "admin",
@@ -31,6 +31,7 @@
     ".medusa/server",
     "scripts",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "main": "./.medusa/server/src/index.js",
