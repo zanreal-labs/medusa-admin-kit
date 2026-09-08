@@ -31,6 +31,7 @@
     ".medusa/server",
     "scripts",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "main": "./.medusa/server/src/index.js",
