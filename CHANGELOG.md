@@ -12,7 +12,19 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 ## [Unreleased]
 
-Nothing yet. `main` is at the published version.
+Nothing yet.
+
+## [0.2.1] - 2026-09-08
+
+### Added
+
+- This changelog, shipped in the published tarball.
+
+### Note
+
+- This package is deliberately **not** listed in the Medusa integrations directory.
+  That directory covers plugins integrating a third-party service, and this one
+  integrates nothing - it is a registry that sibling plugins render into.
 
 ## [0.2.0] - 2026-09-01
 
@@ -45,7 +57,8 @@ First public release. MIT, published from CI with npm provenance.
 - `prepare` script, so a git-installed build works.
 - Admin UI in English and Polish, with the sidebar label resolved through i18n.
 
-[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.1
 [0.2.0]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.0
 [0.1.1]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.1.1
 [0.1.0]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.1.0
