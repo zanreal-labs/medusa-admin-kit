@@ -12,8 +12,14 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] - 2026-09-24
+
 ### Changed
 
+- **Breaking: the `@medusajs/*` peers now pin 2.21.1.** 0.2.x pinned 2.18.0 exactly, which npm
+  refuses to install next to a newer Medusa. Stay on 0.2.x with Medusa 2.18; take 0.3.0 with 2.21.1.
 - **Built and tested against Medusa 2.21.1** (was 2.18.0), with the admin toolchain Medusa 2.19
   requires: Vite 7 and, where used, React Router 7. `react-i18next` and `i18next` deliberately stay
   on the majors the Medusa dashboard itself ships (13 and 23): admin extensions share the host's
@@ -63,7 +69,8 @@ First public release. MIT, published from CI with npm provenance.
 - `prepare` script, so a git-installed build works.
 - Admin UI in English and Polish, with the sidebar label resolved through i18n.
 
-[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.1
 [0.2.0]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.0
 [0.1.1]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.1.1
