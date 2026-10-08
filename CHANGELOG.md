@@ -14,6 +14,17 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 Nothing yet.
 
+## [0.3.1] - Unreleased
+
+### Changed
+
+- **The `@medusajs/*` peers now pin 2.21.2** (and `@medusajs/ui` 4.2.6), up from 2.21.1. Medusa
+  2.21.2 is a patch release (search route field restriction, search cache fixes, a promotion
+  prefilter fix, dashboard fixes); nothing in the registry API changes. The peers are pinned
+  exactly, so npm will not install 0.3.1 next to Medusa 2.21.1: stay on 0.3.0 with 2.21.1, take
+  0.3.1 with 2.21.2.
+- **Built and tested against Medusa 2.21.2.**
+
 ## [0.3.0] - 2026-09-24
 
 ### Changed
@@ -69,7 +80,8 @@ First public release. MIT, published from CI with npm provenance.
 - `prepare` script, so a git-installed build works.
 - Admin UI in English and Polish, with the sidebar label resolved through i18n.
 
-[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.1
 [0.2.0]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.0
