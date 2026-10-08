@@ -14,7 +14,7 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 Nothing yet.
 
-## [0.3.1] - Unreleased
+## [0.3.1] - 2026-10-08
 
 ### Changed
 
