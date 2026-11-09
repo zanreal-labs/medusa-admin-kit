@@ -14,6 +14,16 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 Nothing yet.
 
+## [0.4.0] - Unreleased
+
+### Changed
+
+- **The `@medusajs/*` peers now pin 2.22.1** (and `@medusajs/ui` 4.2.8, the version the 2.22.1
+  dashboard uses), up from 2.21.2. Medusa 2.22 requires Node.js 22.22 or later; nothing in the
+  registry API changes. The peers are pinned exactly, so npm will not install 0.4.0 next to
+  Medusa 2.21.x: stay on 0.3.1 with 2.21.2, take 0.4.0 with 2.22.1.
+- **Built and tested against Medusa 2.22.1.**
+
 ## [0.3.1] - 2026-10-08
 
 ### Changed
