@@ -65,7 +65,7 @@ await build({
     },
     minify: false,
     outDir,
-    rollupOptions: {
+    rolldownOptions: {
       output: { exports: "named" },
     },
     // The tsc output next to it is CommonJS on purpose; do not let vite report

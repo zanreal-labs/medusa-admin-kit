@@ -12,7 +12,12 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **Built and tested against Medusa 2.23.0.** The `@medusajs/*` peers now pin 2.23.0 and
+  `@medusajs/ui` 4.3.0. The peers move to React `^19.3.1` and `react-i18next` 18.0.1, and Node.js
+  22.22 or later is required. The build script moves to Vite 8 (`rolldownOptions`). Nothing in
+  the registry API changes.
 
 ## [0.4.0] - Unreleased
 
