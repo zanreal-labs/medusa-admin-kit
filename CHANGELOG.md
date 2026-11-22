@@ -14,7 +14,22 @@ breaking for every plugin that registers a column, so they are called out as suc
 
 Nothing yet.
 
-## [0.4.0] - Unreleased
+## [0.5.0] - 2026-11-22
+
+### Changed
+
+- **The `@medusajs/*` peers now pin 2.23.0** (and `@medusajs/ui` 4.3.0, the version the 2.23.0
+  dashboard uses), up from 2.22.1. Medusa 2.23 moves the admin to React 19, so the `react` and
+  `react-dom` peers are now `^19.3.1` and `react-i18next` is `^18.0.1`, the majors
+  `@medusajs/dashboard` 2.23.0 renders with. Nothing in the registry API changes. The peers are
+  pinned exactly, so npm will not install 0.5.0 next to Medusa 2.22.x: stay on 0.4.0 with 2.22.1,
+  take 0.5.0 with 2.23.0.
+- **Built and tested against Medusa 2.23.0**, with TanStack Table 9 and Vite 8 in the toolchain.
+- Node.js 22.22 or newer, as Medusa 2.23 itself requires.
+- Dependency updates now come from Renovate, run weekly by the `zanek-ai` app from
+  `.github/workflows/renovate.yml`.
+
+## [0.4.0] - 2026-11-09
 
 ### Changed
 
@@ -90,7 +105,9 @@ First public release. MIT, published from CI with npm provenance.
 - `prepare` script, so a git-installed build works.
 - Admin UI in English and Polish, with the sidebar label resolved through i18n.
 
-[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/zanreal-labs/medusa-admin-kit/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/zanreal-labs/medusa-admin-kit/releases/tag/v0.2.1
